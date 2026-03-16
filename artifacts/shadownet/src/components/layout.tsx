@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { TerminalSquare, Key, Network, Shield, Menu, X, ChevronRight } from "lucide-react";
+import { TerminalSquare, Key, Network, Shield, Menu, X, ChevronRight, BookOpen } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/sessions", label: "STEALTH_SESS", icon: Shield },
   { href: "/wallet", label: "GEN_WALLET", icon: Key },
   { href: "/relay", label: "RELAY_NET", icon: Network },
+  { href: "/docs", label: "DOCS", icon: BookOpen },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
