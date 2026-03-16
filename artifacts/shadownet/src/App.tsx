@@ -1,13 +1,14 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-import { Layout } from "@/components/layout";
-import Home from "@/pages/home";
-import SessionsPage from "@/pages/sessions";
-import WalletPage from "@/pages/wallet";
-import RelayPage from "@/pages/relay";
+import Landing from "@/pages/landing";
+import { AppLayout } from "@/pages/app/layout";
+import Dashboard from "@/pages/app/dashboard";
+import AppSessions from "@/pages/app/sessions";
+import AppWallet from "@/pages/app/wallet";
+import AppRelay from "@/pages/app/relay";
 import DocsPage from "@/pages/docs";
 import NotFound from "@/pages/not-found";
 
@@ -15,23 +16,36 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      staleTime: 1000 * 60 * 5,
     },
   },
 });
 
-function Router() {
+function AppShell() {
   return (
-    <Layout>
+    <AppLayout>
       <Switch>
-        <Route path="/" component={Home} />
-        <Route path="/sessions" component={SessionsPage} />
-        <Route path="/wallet" component={WalletPage} />
-        <Route path="/relay" component={RelayPage} />
-        <Route path="/docs" component={DocsPage} />
+        <Route path="/app/dashboard" component={Dashboard} />
+        <Route path="/app/sessions" component={AppSessions} />
+        <Route path="/app/wallet" component={AppWallet} />
+        <Route path="/app/relay" component={AppRelay} />
+        <Route path="/app">
+          <Redirect to="/app/dashboard" />
+        </Route>
         <Route component={NotFound} />
       </Switch>
-    </Layout>
+    </AppLayout>
+  );
+}
+
+function Router() {
+  return (
+    <Switch>
+      <Route path="/" component={Landing} />
+      <Route path="/docs" component={DocsPage} />
+      <Route path="/app/:rest*" component={AppShell} />
+      <Route component={NotFound} />
+    </Switch>
   );
 }
 
