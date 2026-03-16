@@ -1,15 +1,20 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: ShadowNet API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: wallet
+    description: Anonymous Solana wallet generation
+  - name: relay
+    description: Relay network operations
+  - name: session
+    description: Stealth session management
 paths:
   /healthz:
     get:
@@ -24,6 +29,95 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /wallet/generate:
+    post:
+      operationId: generateWallet
+      tags: [wallet]
+      summary: Generate anonymous Solana wallet
+      description: Generates a new Ed25519 keypair for Solana, returning public key, private key (Base58), and mnemonic phrase. Keys are generated server-side and never stored.
+      responses:
+        "200":
+          description: Generated wallet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedWallet"
+
+  /relay/nodes:
+    get:
+      operationId: getRelayNodes
+      tags: [relay]
+      summary: Get available relay nodes
+      description: Returns list of audited relay nodes with their status, location, and performance metrics
+      responses:
+        "200":
+          description: List of relay nodes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelayNodeList"
+
+  /relay/nodes/{nodeId}/connect:
+    post:
+      operationId: connectToRelayNode
+      tags: [relay]
+      summary: Connect to relay node
+      description: Initiates connection to a specific relay node
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Connection established
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RelayConnection"
+        "404":
+          description: Node not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /session/fingerprint:
+    get:
+      operationId: getFingerprintProfile
+      tags: [session]
+      summary: Get randomized fingerprint profile
+      description: Returns a randomized browser fingerprint profile for stealth session
+      responses:
+        "200":
+          description: Fingerprint profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FingerprintProfile"
+
+  /session/start:
+    post:
+      operationId: startStealthSession
+      tags: [session]
+      summary: Start a stealth session
+      description: Initiates a stealth session with randomized fingerprint and IP cloaking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartSessionRequest"
+      responses:
+        "200":
+          description: Session started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StealthSession"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +128,195 @@ components:
       required:
         - status
 
+    GeneratedWallet:
+      type: object
+      properties:
+        publicKey:
+          type: string
+          description: Solana public key (Base58)
+        privateKey:
+          type: string
+          description: Private key (Base58) - importable into Phantom
+        mnemonic:
+          type: string
+          description: 12-word mnemonic phrase
+        derivationPath:
+          type: string
+          description: BIP44 derivation path used
+        createdAt:
+          type: string
+          description: ISO timestamp of generation
+      required:
+        - publicKey
+        - privateKey
+        - mnemonic
+        - derivationPath
+        - createdAt
+
+    RelayNode:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        country:
+          type: string
+        city:
+          type: string
+        ipAddress:
+          type: string
+        latencyMs:
+          type: number
+        uptime:
+          type: number
+          description: Uptime percentage (0-100)
+        status:
+          type: string
+          enum: [online, offline, maintenance]
+        audited:
+          type: boolean
+        noLogs:
+          type: boolean
+        load:
+          type: number
+          description: Current load percentage (0-100)
+      required:
+        - id
+        - name
+        - country
+        - city
+        - ipAddress
+        - latencyMs
+        - uptime
+        - status
+        - audited
+        - noLogs
+        - load
+
+    RelayNodeList:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/RelayNode"
+        totalCount:
+          type: integer
+        onlineCount:
+          type: integer
+      required:
+        - nodes
+        - totalCount
+        - onlineCount
+
+    RelayConnection:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        nodeId:
+          type: string
+        connectedAt:
+          type: string
+        maskedIp:
+          type: string
+        status:
+          type: string
+          enum: [connected, failed, pending]
+      required:
+        - sessionId
+        - nodeId
+        - connectedAt
+        - maskedIp
+        - status
+
+    FingerprintProfile:
+      type: object
+      properties:
+        userAgent:
+          type: string
+        screenResolution:
+          type: string
+        colorDepth:
+          type: integer
+        timezone:
+          type: string
+        language:
+          type: string
+        platform:
+          type: string
+        webglVendor:
+          type: string
+        webglRenderer:
+          type: string
+        canvasHash:
+          type: string
+        audioHash:
+          type: string
+        fonts:
+          type: array
+          items:
+            type: string
+        profileId:
+          type: string
+      required:
+        - userAgent
+        - screenResolution
+        - colorDepth
+        - timezone
+        - language
+        - platform
+        - webglVendor
+        - webglRenderer
+        - canvasHash
+        - audioHash
+        - fonts
+        - profileId
+
+    StartSessionRequest:
+      type: object
+      properties:
+        relayNodeId:
+          type: string
+          description: Optional relay node ID to route through
+        fingerprintProfileId:
+          type: string
+          description: Optional fingerprint profile ID
+      required: []
+
+    StealthSession:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        startedAt:
+          type: string
+        fingerprintProfileId:
+          type: string
+        relayNodeId:
+          type: string
+        maskedIp:
+          type: string
+        status:
+          type: string
+          enum: [active, expired, terminated]
+        expiresAt:
+          type: string
+      required:
+        - sessionId
+        - startedAt
+        - fingerprintProfileId
+        - status
+        - expiresAt
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+        - message

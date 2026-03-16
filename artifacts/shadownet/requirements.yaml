@@ -1,0 +1,17 @@
+packages:
+  "framer-motion": "Required for cyberpunk page transitions, staggered list animations, and glowing pulse effects"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility to safely merge Tailwind classes"
+  "date-fns": "For formatting session timestamps"
+
+images:
+  - path: "artifacts/shadownet/public/images/cyber-bg.png"
+    description: "Dark cyberpunk hacker aesthetic background, subtle neon green and dark purple glowing grid or matrix digital rain pattern on pitch black, very abstract and dark, suitable for a text overlay"
+    aspect_ratio: "16:9"
+  - path: "artifacts/shadownet/public/images/logo-mark.png"
+    description: "Minimalist hacker emblem logo, neon green geometric sharp edges, stylized S lettermark, isolated on pure black background"
+    aspect_ratio: "1:1"
+
+notes:
+  - Using generated orval hooks from @workspace/api-client-react
+  - Aesthetic is heavily terminal-inspired with monospace fonts and pure black backgrounds
