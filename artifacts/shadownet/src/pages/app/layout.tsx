@@ -1,12 +1,13 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Shield, Key, Network, LayoutDashboard, Twitter } from "lucide-react";
+import { Shield, Key, Network, LayoutDashboard, Twitter, Radar } from "lucide-react";
 
 const tabs = [
-  { href: "/app/dashboard", label: "DASHBOARD", icon: LayoutDashboard },
+  { href: "/app/dashboard", label: "DASH", icon: LayoutDashboard },
   { href: "/app/sessions", label: "STEALTH", icon: Shield },
   { href: "/app/wallet", label: "WALLET", icon: Key },
   { href: "/app/relay", label: "RELAY", icon: Network },
+  { href: "/app/intel", label: "INTEL", icon: Radar },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
