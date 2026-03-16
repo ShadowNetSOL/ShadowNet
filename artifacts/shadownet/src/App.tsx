@@ -8,6 +8,7 @@ import Home from "@/pages/home";
 import SessionsPage from "@/pages/sessions";
 import WalletPage from "@/pages/wallet";
 import RelayPage from "@/pages/relay";
+import DocsPage from "@/pages/docs";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -27,6 +28,7 @@ function Router() {
         <Route path="/sessions" component={SessionsPage} />
         <Route path="/wallet" component={WalletPage} />
         <Route path="/relay" component={RelayPage} />
+        <Route path="/docs" component={DocsPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
