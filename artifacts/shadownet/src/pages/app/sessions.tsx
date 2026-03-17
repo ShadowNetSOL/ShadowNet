@@ -62,8 +62,21 @@ export default function AppSessions() {
       <div className="flex items-start gap-3 p-3.5 rounded-lg border border-primary/15 bg-primary/5">
         <Lock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
         <p className="text-[10px] font-mono text-white/50 leading-relaxed">
-          Your request is fetched <span className="text-primary">server-side</span> — the destination site sees our server's IP, not your real location. Fingerprint spoofing is applied on top.
+          Your request is fetched <span className="text-primary">server-side</span> — the destination sees our relay IP, not yours. Sites behind Cloudflare may show a "blocked" notice (your IP is still never exposed).
         </p>
+      </div>
+
+      {/* Compatible sites hint */}
+      <div className="p-3.5 rounded-lg border border-white/6 bg-white/[0.015]">
+        <p className="text-[9px] font-mono text-white/25 uppercase tracking-widest mb-2">Works well with</p>
+        <div className="flex flex-wrap gap-1.5">
+          {["solana.com","pump.fun","jup.ag","raydium.io","birdeye.so","solscan.io"].map(s => (
+            <button key={s} onClick={() => setTargetUrl("https://" + s)}
+              className="text-[9px] font-mono px-2 py-1 rounded border border-white/8 text-white/35 hover:text-primary hover:border-primary/30 transition-colors">
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Target URL */}
