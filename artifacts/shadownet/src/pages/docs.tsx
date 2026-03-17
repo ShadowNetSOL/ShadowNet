@@ -1,4 +1,5 @@
-import { BookOpen, Shield, Key, Network, ChevronDown, ChevronRight } from "lucide-react";
+import { BookOpen, Shield, Key, Network, Radar, ChevronDown, ChevronRight, ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -56,6 +57,25 @@ interface DocSection {
   icon: React.ComponentType<{ className?: string }>;
   content: Array<{ heading?: string; body: string }>;
 }
+
+const intelFaqs: FaqItem[] = [
+  {
+    q: "What is Intel Hub?",
+    a: "Intel Hub is ShadowNet's on-chain investigation suite. It lets you analyze any Solana wallet's transaction history, check Twitter/X accounts for contract addresses they've posted, and track the followers of any X account — all without leaving ShadowNet. Intel Hub is designed for token due-diligence, alpha research, and wallet surveillance.",
+  },
+  {
+    q: "How does the Wallet Analyzer work?",
+    a: "Enter any Solana public key. Intel Hub queries the Helius RPC to retrieve all historical transactions for that address, computes PnL across every token traded, identifies the wallet's most profitable and most-held assets, and displays the results in a clean breakdown. You can see realized gains, token frequency, and volume without needing a third-party explorer.",
+  },
+  {
+    q: "What is the X CA Checker?",
+    a: "The X CA Checker scans any X (Twitter) account's recent posts for Solana contract addresses (CAs). It extracts and deduplicates any Base58 token mint addresses found in tweets, giving you a fast view of which tokens a given account has publicly promoted. Useful for tracking KOL calls and verifying launch claims.",
+  },
+  {
+    q: "What does Smart Followers show?",
+    a: "Smart Followers shows which high-signal X accounts follow a given user. Enter an X handle and ShadowNet cross-references the follower list against a registry of known traders, analysts, and degen wallets. High overlap with smart-money accounts indicates that the account is tracked by the market's best performers.",
+  },
+];
 
 const sections: DocSection[] = [
   {
@@ -154,6 +174,32 @@ const sections: DocSection[] = [
       },
     ],
   },
+  {
+    id: "intel-hub",
+    title: "Intel Hub",
+    icon: Radar,
+    content: [
+      {
+        body: "Intel Hub is ShadowNet's on-chain and social intelligence layer. It aggregates wallet transaction history, X account CA activity, and social graph data into a single investigation interface — purpose-built for anonymous due-diligence in the Solana ecosystem.",
+      },
+      {
+        heading: "Wallet Analyzer",
+        body: "Paste any Solana public key and Intel Hub retrieves the complete transaction history via Helius RPC. It computes realized PnL across every token traded, highlights the most frequently held assets, and summarizes total volume. No third-party explorers needed — all analysis runs within ShadowNet's privacy stack.",
+      },
+      {
+        heading: "X CA Checker",
+        body: "Enter any X (Twitter) handle and Intel Hub scans their recent posts for Solana contract addresses. It extracts and deduplicates all Base58 token mint addresses found in the timeline, giving you a clear list of tokens the account has publicly mentioned. Invaluable for tracking KOL calls, verifying presale claims, and auditing influencer histories.",
+      },
+      {
+        heading: "Smart Followers",
+        body: "Enter an X handle to see which high-signal accounts follow them. ShadowNet cross-references the follower list against a curated registry of known on-chain traders, analysts, and degen wallets. High overlap with smart-money accounts signals that the market's best performers are watching that account — a strong social alpha indicator.",
+      },
+      {
+        heading: "API key setup",
+        body: "For full Intel Hub functionality you need two API keys: a Helius API key (helius.dev) for deep Solana transaction data, and a Twitter API v2 Bearer Token (developer.twitter.com) for full X account analysis. Keys are stored only in your browser session and are never transmitted to ShadowNet's servers beyond the proxied API request.",
+      },
+    ],
+  },
 ];
 
 function FaqAccordion({ items }: { items: FaqItem[] }) {
@@ -202,8 +248,31 @@ export default function DocsPage() {
 
   const current = sections.find(s => s.id === activeSection) ?? sections[0];
 
+  const allFaqs = [...faqs, ...intelFaqs];
+
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-[#050505] text-white">
+      {/* Top nav */}
+      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 h-14 border-b border-white/6 bg-[#050505]/90 backdrop-blur">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-sm bg-primary flex items-center justify-center">
+            <Shield className="w-3.5 h-3.5 text-black" />
+          </div>
+          <span className="text-xs font-mono font-bold text-primary tracking-widest">SHADOWNET</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <Link href="/">
+            <span className="flex items-center gap-1.5 text-[10px] font-mono text-white/40 hover:text-white/70 transition-colors cursor-pointer tracking-widest">
+              <ArrowLeft className="w-3 h-3" /> BACK
+            </span>
+          </Link>
+          <Link href="/app/dashboard">
+            <span className="px-3 py-1.5 bg-primary text-black text-[10px] font-mono font-bold rounded hover:bg-white transition-colors cursor-pointer tracking-wider">LAUNCH APP</span>
+          </Link>
+        </div>
+      </div>
+
+    <div className="max-w-6xl mx-auto pt-24 pb-20 px-6">
       <div className="border-b border-primary/20 pb-6 mb-8">
         <h1 className="text-3xl font-display text-white flex items-center gap-3">
           <BookOpen className="text-primary w-8 h-8" />
@@ -276,7 +345,7 @@ export default function DocsPage() {
               >
                 <h2 className="text-2xl font-display text-white mb-2">Frequently Asked Questions</h2>
                 <p className="text-muted-foreground font-mono text-sm mb-8">Common questions about ShadowNet's privacy stack and how to use it.</p>
-                <FaqAccordion items={faqs} />
+                <FaqAccordion items={allFaqs} />
               </motion.div>
             ) : (
               <motion.div
@@ -327,6 +396,7 @@ export default function DocsPage() {
           </AnimatePresence>
         </div>
       </div>
+    </div>
     </div>
   );
 }
