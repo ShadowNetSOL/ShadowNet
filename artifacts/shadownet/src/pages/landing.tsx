@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { motion, useInView } from "framer-motion";
-import { Shield, Key, Network, ChevronRight, Check, X } from "lucide-react";
+import { Shield, Key, Network, Radar, ChevronRight, Check, X } from "lucide-react";
 
 const XLogo = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -134,18 +134,28 @@ const capabilities = [
     title: "Stealth Sessions",
     desc: "Every session gets a freshly generated fingerprint — spoofed canvas, WebGL, audio, fonts, timezone, and user-agent. IP cloaked through a relay node. Zero cross-session data leakage.",
     tags: ["Fingerprint Randomization", "IP Cloaking", "Session Isolation"],
+    color: "primary",
   },
   {
     icon: Key,
     title: "Anonymous Wallets",
     desc: "Ed25519 keypairs derived from BIP-39 mnemonics. Base58-encoded private keys importable directly into Phantom. Never stored, never logged. Generated in-memory and discarded.",
     tags: ["Ed25519 Keypairs", "BIP-39 Mnemonic", "Phantom Compatible"],
+    color: "primary",
   },
   {
     icon: Network,
     title: "Relay Network",
     desc: "A curated registry of independently audited relay nodes across 12+ countries. Each node verified for no-logging compliance, security hardening, and uptime. Select by latency or jurisdiction.",
     tags: ["Audited Nodes", "No-Log Verified", "Global Coverage"],
+    color: "primary",
+  },
+  {
+    icon: Radar,
+    title: "Intel Hub",
+    desc: "On-chain intelligence suite for Solana. Analyze any wallet's full PnL history, scan X accounts for contract address calls, and identify smart-money followers — all without leaving ShadowNet.",
+    tags: ["Wallet Analyzer", "X CA Checker", "Smart Followers"],
+    color: "secondary",
   },
 ];
 
@@ -164,6 +174,7 @@ const comparisonRows = [
   { feature: "No Server-Side Data Retention", shadownet: true, vpn: false, browser: false },
   { feature: "Audited Infrastructure", shadownet: true, vpn: false, browser: false },
   { feature: "Web3 / dApp Optimized", shadownet: true, vpn: false, browser: false },
+  { feature: "On-Chain Intel Hub", shadownet: true, vpn: false, browser: false },
 ];
 
 export default function Landing() {
@@ -239,36 +250,51 @@ export default function Landing() {
           <FadeIn>
             <SectionLabel>Core Capabilities</SectionLabel>
             <h2 className="text-4xl md:text-5xl font-mono font-bold leading-tight mb-6">
-              Three layers.<br />
+              Four layers.<br />
               <span className="text-primary">One stack.</span>
             </h2>
             <p className="text-white/45 font-mono text-sm leading-relaxed max-w-md">
-              ShadowNet operates across three independent privacy mechanisms that compound on each other. Each layer closes a distinct tracking vector that conventional tools leave open.
+              ShadowNet operates across four independent modules that compound on each other: stealth sessions, anonymous wallets, a global relay network, and on-chain intelligence. Every layer closes a distinct tracking vector that conventional tools leave open.
             </p>
           </FadeIn>
           <FadeIn delay={0.2} className="h-72">
             <NodeVisualization />
           </FadeIn>
         </div>
-        <div className="grid md:grid-cols-3 gap-6">
-          {capabilities.map((c, i) => (
-            <FadeIn key={c.title} delay={i * 0.1}>
-              <div className="group h-full p-8 rounded-xl border border-white/8 bg-white/[0.02] hover:border-primary/30 hover:bg-primary/[0.03] transition-all duration-300 cursor-default">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center mb-6 group-hover:bg-primary/20 transition-colors">
-                  <c.icon className="w-5 h-5 text-primary" />
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {capabilities.map((c, i) => {
+            const isSecondary = c.color === "secondary";
+            return (
+              <FadeIn key={c.title} delay={i * 0.1}>
+                <div className={`group h-full p-8 rounded-xl border bg-white/[0.02] transition-all duration-300 cursor-default ${
+                  isSecondary
+                    ? "border-white/8 hover:border-secondary/30 hover:bg-secondary/[0.03]"
+                    : "border-white/8 hover:border-primary/30 hover:bg-primary/[0.03]"
+                }`}>
+                  <div className={`w-10 h-10 rounded-lg border flex items-center justify-center mb-6 transition-colors ${
+                    isSecondary
+                      ? "bg-secondary/10 border-secondary/20 group-hover:bg-secondary/20"
+                      : "bg-primary/10 border-primary/20 group-hover:bg-primary/20"
+                  }`}>
+                    <c.icon className={`w-5 h-5 ${isSecondary ? "text-secondary" : "text-primary"}`} />
+                  </div>
+                  <h3 className="text-lg font-mono font-bold text-white mb-3">{c.title}</h3>
+                  <p className="text-white/40 font-mono text-sm leading-relaxed mb-6">{c.desc}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {c.tags.map(tag => (
+                      <span key={tag} className={`px-2 py-1 rounded text-[10px] font-mono border ${
+                        isSecondary
+                          ? "text-secondary/70 border-secondary/15 bg-secondary/5"
+                          : "text-primary/70 border-primary/15 bg-primary/5"
+                      }`}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <h3 className="text-lg font-mono font-bold text-white mb-3">{c.title}</h3>
-                <p className="text-white/40 font-mono text-sm leading-relaxed mb-6">{c.desc}</p>
-                <div className="flex flex-wrap gap-2">
-                  {c.tags.map(tag => (
-                    <span key={tag} className="px-2 py-1 rounded text-[10px] font-mono text-primary/70 border border-primary/15 bg-primary/5">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </FadeIn>
-          ))}
+              </FadeIn>
+            );
+          })}
         </div>
       </section>
 

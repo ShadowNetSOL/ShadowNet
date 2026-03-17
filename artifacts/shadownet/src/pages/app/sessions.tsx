@@ -272,20 +272,40 @@ export default function AppSessions() {
                   </label>
                   {nodesData?.nodes && nodesData.nodes.length > 0 ? (
                     <div className="space-y-2">
-                      {nodesData.nodes.slice(0, 1).map(node => (
-                        <div key={node.id} className="flex items-center justify-between p-3 bg-black rounded-lg border border-white/5">
-                          <div>
-                            <p className="text-xs font-mono text-white/80">{node.name} · <span className="text-white/30 text-[10px]">{node.country}</span></p>
-                            <div className="flex gap-2 mt-1 text-[9px] font-mono text-white/30">
-                              <span>Uptime <span className="text-green-400">{node.uptime}</span></span>
-                              <span>Load <span className="text-white/50">{node.currentLoad}</span></span>
-                              {node.features?.includes("audited") && <span className="text-primary">✓ Audited</span>}
-                              {node.features?.includes("no-logs") && <span className="text-primary">✓ No-Logs</span>}
+                      {nodesData.nodes.map(node => {
+                        const isSelected = selectedNode === node.id;
+                        const isOnline = node.status === "online";
+                        return (
+                          <button
+                            key={node.id}
+                            onClick={() => isOnline && setSelectedNode(node.id)}
+                            disabled={!isOnline}
+                            className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all text-left ${
+                              isSelected
+                                ? "border-primary/50 bg-primary/5"
+                                : isOnline
+                                  ? "border-white/8 bg-black hover:border-white/20"
+                                  : "border-white/4 bg-black opacity-40 cursor-not-allowed"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? "bg-primary" : isOnline ? "bg-green-500" : "bg-red-400"}`} />
+                              <div>
+                                <p className="text-xs font-mono text-white/80">{node.name} · <span className="text-white/30 text-[10px]">{node.country}</span></p>
+                                <div className="flex gap-2 mt-0.5 text-[9px] font-mono text-white/30">
+                                  <span>Uptime <span className="text-green-400">{node.uptime}</span></span>
+                                  <span>Load <span className="text-white/50">{node.currentLoad}</span></span>
+                                  {node.features?.includes("audited") && <span className="text-primary">✓ Audited</span>}
+                                  {node.features?.includes("no-logs") && <span className="text-primary">✓ No-Logs</span>}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                          <div className={`w-2 h-2 rounded-full ${node.status === "online" ? "bg-primary" : "bg-red-400"}`} />
-                        </div>
-                      ))}
+                            {isSelected && (
+                              <span className="text-[8px] font-mono text-primary border border-primary/30 px-1.5 py-0.5 rounded shrink-0">SELECTED</span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-xs font-mono text-white/20 animate-pulse">Loading nodes…</p>
