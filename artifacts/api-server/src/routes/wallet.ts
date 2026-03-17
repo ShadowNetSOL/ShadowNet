@@ -15,8 +15,7 @@ router.post("/wallet/generate", (_req, res) => {
   const keypair = Keypair.fromSeed(derived.key);
 
   const publicKey = keypair.publicKey.toBase58();
-  const privateKeyBytes = keypair.secretKey.slice(0, 32);
-  const privateKey = bs58.encode(privateKeyBytes);
+  const privateKey = bs58.encode(keypair.secretKey);
 
   const data = GenerateWalletResponse.parse({
     publicKey,
