@@ -39,7 +39,12 @@ export default function AppWallet() {
   const history = wallets.slice(1);
 
   const handleGenerate = () => {
-    generateWallet(undefined, { onSuccess: data => setWallets(p => [data, ...p].slice(0, 4)) });
+    generateWallet(undefined, {
+      onSuccess: data => {
+        setWallets(p => [data, ...p].slice(0, 4));
+        try { localStorage.setItem("sn_wallets", String((parseInt(localStorage.getItem("sn_wallets") ?? "0", 10)) + 1)); } catch {}
+      }
+    });
   };
 
   return (

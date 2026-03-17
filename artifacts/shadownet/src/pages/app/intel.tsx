@@ -30,8 +30,18 @@ interface CAResult {
   followers: number;
   bio: string;
   verified: boolean;
+  joinDate: string | null;
+  userId: string | null;
   caCount: number;
   contractAddresses: Array<{ address: string; postedAt: string | null; tweetText: string; tweetId: string }>;
+  usernameHistory: {
+    currentUsername: string;
+    firstSeen: string | null;
+    lastSeen: string | null;
+    snapshotCount: number;
+    possiblePreviousNames: string[];
+    note: string;
+  } | null;
 }
 
 interface SmartFollowersResult {
@@ -313,6 +323,57 @@ function XCAChecker() {
                 <p className="text-[10px] font-mono text-white/30">followers</p>
               </div>
             </div>
+
+            {/* Username History */}
+            {result.usernameHistory && (
+              <div className="rounded-xl border border-secondary/20 bg-secondary/[0.03] overflow-hidden">
+                <div className="px-4 py-3 border-b border-secondary/15 flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-secondary" />
+                  <p className="text-[10px] font-mono text-secondary uppercase tracking-widest">Username History</p>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                      <p className="text-[9px] font-mono text-white/30 uppercase tracking-wider">Current Username</p>
+                      <p className="text-xs font-mono text-white font-bold">@{result.usernameHistory.currentUsername}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                      <p className="text-[9px] font-mono text-white/30 uppercase tracking-wider">Archive Snapshots</p>
+                      <p className="text-xs font-mono text-white font-bold">
+                        {result.usernameHistory.snapshotCount > 0 ? result.usernameHistory.snapshotCount.toLocaleString() : "None found"}
+                      </p>
+                    </div>
+                    {result.usernameHistory.firstSeen && (
+                      <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                        <p className="text-[9px] font-mono text-white/30 uppercase tracking-wider">First Archived</p>
+                        <p className="text-xs font-mono text-primary">{result.usernameHistory.firstSeen}</p>
+                      </div>
+                    )}
+                    {result.usernameHistory.lastSeen && (
+                      <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                        <p className="text-[9px] font-mono text-white/30 uppercase tracking-wider">Last Archived</p>
+                        <p className="text-xs font-mono text-white/60">{result.usernameHistory.lastSeen}</p>
+                      </div>
+                    )}
+                  </div>
+                  {result.usernameHistory.possiblePreviousNames.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[9px] font-mono text-white/30 uppercase tracking-wider">Previous Usernames Detected</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {result.usernameHistory.possiblePreviousNames.map(name => (
+                          <span key={name} className="text-[9px] font-mono px-2 py-1 rounded border border-secondary/20 text-secondary/80 bg-secondary/5">
+                            @{name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-[9px] font-mono text-white/25 leading-relaxed pt-1 border-t border-white/5">
+                    {result.usernameHistory.note}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* CA Count summary */}
             <div className={`p-4 rounded-xl border ${result.caCount > 0 ? "border-primary/30 bg-primary/5" : "border-white/8 bg-white/[0.02]"} flex items-center justify-between`}>

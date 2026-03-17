@@ -209,7 +209,7 @@ function FaqAccordion({ items }: { items: FaqItem[] }) {
       {items.map((item, idx) => (
         <div
           key={idx}
-          className="border border-primary/20 rounded-lg overflow-hidden bg-card"
+          className="border border-primary/20 rounded-lg overflow-hidden bg-white/[0.03]"
         >
           <button
             className="w-full flex items-center justify-between px-6 py-4 text-left text-white font-mono text-sm hover:bg-primary/5 transition-colors"
@@ -219,7 +219,7 @@ function FaqAccordion({ items }: { items: FaqItem[] }) {
             {openIdx === idx ? (
               <ChevronDown className="w-4 h-4 text-primary shrink-0" />
             ) : (
-              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              <ChevronRight className="w-4 h-4 text-white/50 shrink-0" />
             )}
           </button>
           <AnimatePresence>
@@ -231,7 +231,7 @@ function FaqAccordion({ items }: { items: FaqItem[] }) {
                 transition={{ duration: 0.25 }}
                 className="overflow-hidden"
               >
-                <div className="px-6 pb-5 pt-1 text-sm text-muted-foreground font-mono leading-relaxed border-t border-primary/10">
+                <div className="px-6 pb-5 pt-1 text-sm text-white/50 font-mono leading-relaxed border-t border-primary/10">
                   {item.a}
                 </div>
               </motion.div>
@@ -278,15 +278,27 @@ export default function DocsPage() {
           <BookOpen className="text-primary w-8 h-8" />
           DOCUMENTATION
         </h1>
-        <p className="text-muted-foreground font-mono mt-2">
+        <p className="text-white/50 font-mono mt-2">
           Technical reference for all ShadowNet modules and privacy protocols.
         </p>
       </div>
 
+      {/* Mobile section picker — above the flex row */}
+      <div className="md:hidden w-full mb-6">
+        <select
+          value={activeSection}
+          onChange={e => setActiveSection(e.target.value)}
+          className="w-full bg-[#0a0a0a] border border-primary/30 rounded-md py-3 px-4 text-white font-mono text-sm focus:outline-none focus:border-primary"
+        >
+          {sections.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+          <option value="faq">FAQ</option>
+        </select>
+      </div>
+
       <div className="flex gap-8">
-        {/* Doc sidebar */}
+        {/* Doc sidebar — desktop only */}
         <aside className="w-56 shrink-0 hidden md:block">
-          <nav className="space-y-1 sticky top-8">
+          <nav className="space-y-1 sticky top-20">
             {sections.map(s => {
               const isActive = s.id === activeSection;
               return (
@@ -296,7 +308,7 @@ export default function DocsPage() {
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded text-left transition-all font-mono text-sm ${
                     isActive
                       ? "bg-primary/10 text-primary border-l-2 border-primary"
-                      : "text-muted-foreground hover:text-white hover:bg-white/5 border-l-2 border-transparent"
+                      : "text-white/30 hover:text-white hover:bg-white/5 border-l-2 border-transparent"
                   }`}
                 >
                   <s.icon className="w-4 h-4 shrink-0" />
@@ -310,7 +322,7 @@ export default function DocsPage() {
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded text-left transition-all font-mono text-sm ${
                   activeSection === "faq"
                     ? "bg-primary/10 text-primary border-l-2 border-primary"
-                    : "text-muted-foreground hover:text-white hover:bg-white/5 border-l-2 border-transparent"
+                    : "text-white/30 hover:text-white hover:bg-white/5 border-l-2 border-transparent"
                 }`}
               >
                 <span className="text-base leading-none">?</span>
@@ -320,20 +332,8 @@ export default function DocsPage() {
           </nav>
         </aside>
 
-        {/* Mobile section picker */}
-        <div className="md:hidden w-full mb-6">
-          <select
-            value={activeSection}
-            onChange={e => setActiveSection(e.target.value)}
-            className="w-full bg-card border border-primary/30 rounded-md py-3 px-4 text-white font-mono text-sm focus:outline-none focus:border-primary"
-          >
-            {sections.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
-            <option value="faq">FAQ</option>
-          </select>
-        </div>
-
         {/* Doc content */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
           <AnimatePresence mode="wait">
             {activeSection === "faq" ? (
               <motion.div
@@ -344,7 +344,7 @@ export default function DocsPage() {
                 transition={{ duration: 0.2 }}
               >
                 <h2 className="text-2xl font-display text-white mb-2">Frequently Asked Questions</h2>
-                <p className="text-muted-foreground font-mono text-sm mb-8">Common questions about ShadowNet's privacy stack and how to use it.</p>
+                <p className="text-white/50 font-mono text-sm mb-8">Common questions about ShadowNet's privacy stack and how to use it.</p>
                 <FaqAccordion items={allFaqs} />
               </motion.div>
             ) : (
@@ -367,7 +367,7 @@ export default function DocsPage() {
                       {block.heading && (
                         <h3 className="text-base font-display text-primary tracking-wide">{block.heading}</h3>
                       )}
-                      <p className="text-muted-foreground font-mono text-sm leading-relaxed">{block.body}</p>
+                      <p className="text-white/50 font-mono text-sm leading-relaxed">{block.body}</p>
                     </div>
                   ))}
                 </div>
@@ -378,7 +378,7 @@ export default function DocsPage() {
                     <button
                       key={s.id}
                       onClick={() => setActiveSection(s.id)}
-                      className="flex items-center gap-2 text-xs font-mono text-muted-foreground hover:text-primary transition-colors border border-primary/15 hover:border-primary/40 rounded px-3 py-2"
+                      className="flex items-center gap-2 text-xs font-mono text-white/50 hover:text-primary transition-colors border border-primary/15 hover:border-primary/40 rounded px-3 py-2"
                     >
                       <s.icon className="w-3 h-3" />
                       {s.title}
@@ -386,7 +386,7 @@ export default function DocsPage() {
                   ))}
                   <button
                     onClick={() => setActiveSection("faq")}
-                    className="flex items-center gap-2 text-xs font-mono text-muted-foreground hover:text-primary transition-colors border border-primary/15 hover:border-primary/40 rounded px-3 py-2"
+                    className="flex items-center gap-2 text-xs font-mono text-white/50 hover:text-primary transition-colors border border-primary/15 hover:border-primary/40 rounded px-3 py-2"
                   >
                     FAQ
                   </button>

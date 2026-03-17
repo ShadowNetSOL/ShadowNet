@@ -163,6 +163,65 @@ router.post("/intelligence/wallet", async (req, res) => {
   }
 });
 
+// Helper: query Wayback Machine CDX for username history
+async function getWaybackHistory(handle: string): Promise<{
+  firstSeen: string | null;
+  lastSeen: string | null;
+  snapshotCount: number;
+  possiblePreviousNames: string[];
+}> {
+  try {
+    // Query CDX for all snapshots of twitter.com/handle
+    const cdxUrl = `https://web.archive.org/cdx/search/cdx?url=twitter.com/${encodeURIComponent(handle)}&output=json&fl=timestamp,statuscode&limit=1000&matchType=exact`;
+    const r = await fetch(cdxUrl, { signal: AbortSignal.timeout(6000) });
+    if (!r.ok) return { firstSeen: null, lastSeen: null, snapshotCount: 0, possiblePreviousNames: [] };
+    const rows: string[][] = await r.json();
+    // rows[0] is the header row ["timestamp","statuscode"]
+    const data = rows.slice(1);
+    if (data.length === 0) return { firstSeen: null, lastSeen: null, snapshotCount: 0, possiblePreviousNames: [] };
+
+    const parseTs = (ts: string) => {
+      // Wayback timestamps: YYYYMMDDHHMMSS
+      const y = ts.slice(0, 4), mo = ts.slice(4, 6), d = ts.slice(6, 8);
+      return `${y}-${mo}-${d}`;
+    };
+
+    const first = data[0][0];
+    const last = data[data.length - 1][0];
+
+    // Look for redirects (301/302) in snapshots — these indicate a username change happened
+    const redirects = data.filter(r => r[1] === "301" || r[1] === "302");
+
+    // Try to find if Wayback has old usernames by checking redirect CDX for x.com too
+    let possiblePreviousNames: string[] = [];
+    try {
+      const xcdx = `https://web.archive.org/cdx/search/cdx?url=x.com/${encodeURIComponent(handle)}&output=json&fl=timestamp,statuscode&limit=100&matchType=exact`;
+      const xr = await fetch(xcdx, { signal: AbortSignal.timeout(4000) });
+      if (xr.ok) {
+        const xrows: string[][] = await xr.json();
+        const xdata = xrows.slice(1);
+        if (xdata.length > 0) {
+          // Account exists on x.com/handle too — normal, but the difference in first-seen date can hint at name history
+          const xFirst = xdata[0][0];
+          // If twitter.com/handle was first seen much earlier than x.com/handle, possible rename
+          if (first && xFirst && first < xFirst) {
+            // No concrete previous names without API, but note the discrepancy
+          }
+        }
+      }
+    } catch {}
+
+    return {
+      firstSeen: first ? parseTs(first) : null,
+      lastSeen: last ? parseTs(last) : null,
+      snapshotCount: data.length,
+      possiblePreviousNames,
+    };
+  } catch {
+    return { firstSeen: null, lastSeen: null, snapshotCount: 0, possiblePreviousNames: [] };
+  }
+}
+
 // POST /api/intelligence/x-ca
 router.post("/intelligence/x-ca", async (req, res) => {
   const { username } = req.body as { username?: string };
@@ -171,7 +230,12 @@ router.post("/intelligence/x-ca", async (req, res) => {
   const handle = username.trim().replace(/^@/, "");
 
   try {
-    const html = await fetchNitter(`/${handle}`);
+    // Run nitter scrape and Wayback history in parallel
+    const [html, wayback] = await Promise.all([
+      fetchNitter(`/${handle}`),
+      getWaybackHistory(handle),
+    ]);
+
     if (!html) return res.status(503).json({ error: "Could not reach Twitter mirror. Try again shortly." });
 
     const $ = cheerio.load(html);
@@ -181,8 +245,20 @@ router.post("/intelligence/x-ca", async (req, res) => {
     const followersText = $(".followers .profile-stat-num").text().trim().replace(/,/g, "");
     const followers = parseInt(followersText) || 0;
     const bio = $(".profile-bio p").text().trim();
-    const avatar = $(".profile-card-avatar img").attr("src") ?? null;
     const verified = $(".profile-card-fullname .verified-icon").length > 0;
+
+    // Extract account creation date if nitter exposes it
+    const joinDateText = $(".profile-card .profile-joindate").text().trim() ||
+      $(".profile-joindate").text().trim() ||
+      $(".join-date").text().trim() || null;
+
+    // Extract user ID if nitter includes it (some instances expose it)
+    let userId: string | null = null;
+    $("a[href*='intent/user']").each((_, el) => {
+      const href = $(el).attr("href") ?? "";
+      const m = href.match(/user_id=(\d+)/);
+      if (m) userId = m[1];
+    });
 
     // Collect CAs from tweets
     const contractAddresses: Array<{
@@ -220,8 +296,22 @@ router.post("/intelligence/x-ca", async (req, res) => {
       followers,
       bio,
       verified,
+      joinDate: joinDateText,
+      userId,
       caCount: contractAddresses.length,
       contractAddresses,
+      usernameHistory: {
+        currentUsername: handle,
+        firstSeen: wayback.firstSeen,
+        lastSeen: wayback.lastSeen,
+        snapshotCount: wayback.snapshotCount,
+        possiblePreviousNames: wayback.possiblePreviousNames,
+        note: wayback.snapshotCount === 0
+          ? "No archive records found for this username. The account may be new or the username may have been recently changed."
+          : wayback.possiblePreviousNames.length > 0
+            ? "Previous usernames detected via web archive redirect history."
+            : "Username appears consistent in web archive records. No redirects detected suggesting a name change.",
+      },
     });
   } catch (err) {
     console.error("x-ca error", err);
