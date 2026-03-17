@@ -144,62 +144,96 @@ export default function AppSessions() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="space-y-5"
+            className="space-y-4"
           >
-            {/* Quick direct access — no verification step */}
-            <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3">
-              <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest flex items-center gap-2">
-                <Globe className="w-3.5 h-3.5 text-primary" /> Direct Relay Access
-              </p>
-              <p className="text-[10px] font-mono text-white/35 leading-relaxed">
-                Type any URL and tap RELAY — or tap a quick-launch site below to open instantly through the US relay.
-              </p>
-              <div className="flex gap-2">
+            {/* ── SECTION 1: GEO-RELAY (real US proxy) ── */}
+            <div className="rounded-xl border border-primary/25 bg-primary/5 overflow-hidden">
+              <div className="px-4 pt-4 pb-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-mono text-primary uppercase tracking-widest flex items-center gap-2">
+                    <Shield className="w-3 h-3" /> Geo-Relay
+                  </p>
+                  <span className="text-[8px] font-mono bg-primary/15 text-primary px-2 py-0.5 rounded-full">US SERVER · IP CLOAKED</span>
+                </div>
+                <p className="text-[9px] font-mono text-white/30">Geo-blocked sites — traffic routes through our US server. Your real IP never reaches the destination.</p>
+              </div>
+              {/* URL bar */}
+              <div className="px-4 pb-3 flex gap-2">
                 <input
                   type="text"
                   value={targetUrl}
                   onChange={e => { setTargetUrl(e.target.value); setUrlError(""); }}
                   onKeyDown={e => { if (e.key === "Enter" && targetUrl.trim()) { const u = normalize(targetUrl); if (u) window.open(`${BASE}api/proxy?url=${encodeURIComponent(u)}`, "_blank", "noopener,noreferrer"); }}}
-                  placeholder="e.g. pornhub.com or any blocked site"
-                  className="flex-1 bg-black border border-white/15 rounded-lg py-3 px-4 text-white font-mono text-sm placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-colors"
+                  placeholder="any geo-blocked site…"
+                  className="flex-1 bg-black border border-primary/20 rounded-lg py-2.5 px-3 text-white font-mono text-xs placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-colors"
                 />
                 <button
-                  onClick={() => {
-                    const u = normalize(targetUrl);
-                    if (!u) { setUrlError("Enter a URL"); return; }
-                    window.open(`${BASE}api/proxy?url=${encodeURIComponent(u)}`, "_blank", "noopener,noreferrer");
-                  }}
+                  onClick={() => { const u = normalize(targetUrl); if (!u) { setUrlError("Enter a URL"); return; } window.open(`${BASE}api/proxy?url=${encodeURIComponent(u)}`, "_blank", "noopener,noreferrer"); }}
                   disabled={!targetUrl.trim()}
-                  className="px-4 py-3 bg-primary text-black font-mono font-bold text-xs rounded-lg hover:bg-white transition-colors disabled:opacity-40 tracking-wider whitespace-nowrap"
-                  style={{ boxShadow: "0 0 12px rgba(57,255,20,0.3)" }}
-                >
-                  RELAY →
-                </button>
+                  className="px-4 py-2.5 bg-primary text-black font-mono font-bold text-[10px] rounded-lg hover:bg-white transition-colors disabled:opacity-40 tracking-wider whitespace-nowrap"
+                  style={{ boxShadow: "0 0 10px rgba(57,255,20,0.3)" }}
+                >RELAY →</button>
               </div>
-              {urlError && <p className="text-xs font-mono text-red-400">{urlError}</p>}
-              {/* Quick launch — tap once to open directly through relay */}
-              <div className="space-y-1.5">
-                <p className="text-[9px] font-mono text-white/20 uppercase tracking-widest">Quick launch — tap to open instantly</p>
+              {urlError && <p className="px-4 pb-2 text-xs font-mono text-red-400">{urlError}</p>}
+              {/* Quick picks */}
+              <div className="px-4 pb-4 space-y-1.5">
+                <p className="text-[8px] font-mono text-white/20 uppercase tracking-widest">Adult &amp; crypto — tap to open via relay</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {["pornhub.com","xvideos.com","jup.ag","raydium.io","birdeye.so","solana.com"].map(s => (
-                    <button key={s}
-                      onClick={() => window.open(`${BASE}api/proxy?url=${encodeURIComponent("https://" + s)}`, "_blank", "noopener,noreferrer")}
-                      className="text-[9px] font-mono px-2.5 py-1.5 rounded border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-colors">
-                      ↗ {s}
+                  {[
+                    { label: "pornhub.com", url: "https://www.pornhub.com" },
+                    { label: "xvideos.com", url: "https://www.xvideos.com" },
+                    { label: "xhamster.com", url: "https://xhamster.com" },
+                    { label: "redtube.com",  url: "https://www.redtube.com" },
+                    { label: "birdeye.so",   url: "https://birdeye.so" },
+                    { label: "raydium.io",   url: "https://raydium.io" },
+                  ].map(s => (
+                    <button key={s.label}
+                      onClick={() => window.open(`${BASE}api/proxy?url=${encodeURIComponent(s.url)}`, "_blank", "noopener,noreferrer")}
+                      className="text-[9px] font-mono px-2.5 py-1.5 rounded border border-primary/20 text-primary/70 hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                      ↗ {s.label}
                     </button>
                   ))}
                 </div>
               </div>
             </div>
-            {/* Status callout */}
-            <div className="p-3 rounded-lg border border-white/6 bg-white/3 space-y-1">
-              <p className="text-[10px] font-mono text-white/50 uppercase tracking-widest">What you'll see</p>
-              <p className="text-[10px] font-mono text-white/30 leading-relaxed">
-                <span className="text-primary">Pornhub</span> — if it shows <span className="text-white/60">"I am 18 or older — Enter"</span> that means the relay worked. The UK block says <span className="text-white/60">"Not available in your country"</span>. Click Enter to proceed.
-              </p>
-              <p className="text-[10px] font-mono text-white/30 leading-relaxed">
-                <span className="text-primary">IP proof</span> — the bar at the top of every relay page shows <span className="text-white/60">"IP cloaked via server relay"</span>.
-              </p>
+
+            {/* ── SECTION 2: STEALTH BROWSE (direct + fingerprint masking) ── */}
+            <div className="rounded-xl border border-secondary/25 bg-secondary/5 overflow-hidden">
+              <div className="px-4 pt-4 pb-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-mono text-secondary uppercase tracking-widest flex items-center gap-2">
+                    <Eye className="w-3 h-3" /> Stealth Browse
+                  </p>
+                  <span className="text-[8px] font-mono bg-secondary/15 text-secondary px-2 py-0.5 rounded-full">FINGERPRINT MASKED</span>
+                </div>
+                <p className="text-[9px] font-mono text-white/30">Standard sites — browser identity &amp; fingerprint spoofed. Opens with stealth session active.</p>
+              </div>
+              {/* Stealth status pills */}
+              <div className="px-4 pb-3 flex flex-wrap gap-1.5">
+                {["Canvas blocked","WebGL spoofed","AudioCtx masked","Font hash randomised","UA normalised"].map(p => (
+                  <span key={p} className="text-[7px] font-mono px-2 py-0.5 rounded-full border border-secondary/20 text-secondary/60">{p}</span>
+                ))}
+              </div>
+              {/* Quick picks */}
+              <div className="px-4 pb-4 space-y-1.5">
+                <p className="text-[8px] font-mono text-white/20 uppercase tracking-widest">Tap to open with stealth session</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: "google.com",   url: "https://www.google.com" },
+                    { label: "youtube.com",  url: "https://www.youtube.com" },
+                    { label: "twitter.com",  url: "https://twitter.com" },
+                    { label: "reddit.com",   url: "https://www.reddit.com" },
+                    { label: "pump.fun",     url: "https://pump.fun" },
+                    { label: "instagram.com",url: "https://www.instagram.com" },
+                  ].map(s => (
+                    <button key={s.label}
+                      onClick={() => window.open(s.url, "_blank", "noopener,noreferrer")}
+                      className="text-[9px] font-mono px-2.5 py-1.5 rounded border border-secondary/20 text-secondary/70 hover:text-secondary hover:border-secondary/50 hover:bg-secondary/5 transition-colors">
+                      ↗ {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {!activeSession && (
