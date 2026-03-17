@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Wallet, Twitter, Users, Copy, Check, ExternalLink, AlertTriangle, ChevronRight, TrendingUp, Activity, Zap, Star, Clock, Info } from "lucide-react";
+import { Search, Wallet, Users, Copy, Check, ExternalLink, AlertTriangle, ChevronRight, TrendingUp, Activity, Zap, Star, Clock, Info } from "lucide-react";
+
+const XLogo = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.258 5.631 5.906-5.631zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+  </svg>
+);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -292,7 +298,7 @@ function XCAChecker() {
             {/* Profile */}
             <div className="p-5 rounded-xl border border-white/8 bg-white/[0.02] flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                <Twitter className="w-5 h-5 text-white/30" />
+                <XLogo className="w-5 h-5 text-white/30" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -495,7 +501,7 @@ type IntelTab = "wallet" | "xca" | "followers";
 
 const tabs: Array<{ id: IntelTab; label: string; icon: React.ElementType; shortLabel: string }> = [
   { id: "wallet", label: "Wallet Analyzer", icon: Wallet, shortLabel: "WALLET" },
-  { id: "xca", label: "X CA Checker", icon: Twitter, shortLabel: "CA CHECK" },
+  { id: "xca", label: "X CA Checker", icon: XLogo, shortLabel: "CA CHECK" },
   { id: "followers", label: "Smart Followers", icon: Users, shortLabel: "FOLLOWERS" },
 ];
 

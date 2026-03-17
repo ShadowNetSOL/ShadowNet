@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { TrendingUp, TrendingDown, RefreshCw, ExternalLink, Twitter, Globe, Flame, DollarSign } from "lucide-react";
+import { TrendingUp, TrendingDown, RefreshCw, ExternalLink, Globe, Flame, DollarSign } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+
+const XLogo = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.258 5.631 5.906-5.631zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+  </svg>
+);
 
 const BASE = import.meta.env.BASE_URL as string;
 
@@ -231,7 +237,7 @@ export default function PumpViewer() {
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono text-[9px] rounded-md hover:bg-blue-500/20 transition-colors"
                         >
-                          <Twitter className="w-2.5 h-2.5" />
+                          <XLogo className="w-2.5 h-2.5" />
                           X
                         </a>
                       )}
