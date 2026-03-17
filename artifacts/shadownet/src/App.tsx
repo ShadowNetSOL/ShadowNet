@@ -9,6 +9,7 @@ import Dashboard from "@/pages/app/dashboard";
 import AppSessions from "@/pages/app/sessions";
 import AppWallet from "@/pages/app/wallet";
 import AppRelay from "@/pages/app/relay";
+import IntelHub from "@/pages/app/intel";
 import DocsPage from "@/pages/docs";
 import NotFound from "@/pages/not-found";
 
@@ -29,6 +30,7 @@ function AppShell() {
         <Route path="/app/sessions" component={AppSessions} />
         <Route path="/app/wallet" component={AppWallet} />
         <Route path="/app/relay" component={AppRelay} />
+        <Route path="/app/intel" component={IntelHub} />
         <Route path="/app">
           <Redirect to="/app/dashboard" />
         </Route>
