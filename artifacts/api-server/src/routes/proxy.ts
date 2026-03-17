@@ -41,10 +41,12 @@ function proxyUrl(href: string, base: string, proxyBase: string): string {
   }
 }
 
-// Injected FIRST in <head>:
-//  1. Spoofs window.location so SPAs (Next.js, React Router) think they're on the real site
-//  2. Patches fetch/XHR to route ALL requests through our relay
-//  3. Handles absolute, protocol-relative, and relative URLs
+// Injected FIRST in <head>. Intercepts every possible resource load path:
+//  1. window.location spoof → SPA routers (Next.js App Router) see the real site URL
+//  2. fetch() / XHR patch → dynamic API calls
+//  3. Element.setAttribute('src'/'href') patch → dynamic <script>/<link> injection
+//  4. HTMLScriptElement.src / HTMLLinkElement.href property setters → webpack chunk loader
+// Together these prevent Next.js dynamic imports from bypassing the relay.
 function buildInterceptScript(proxyBase: string, targetOrigin: string, targetHref: string): string {
   const pb = JSON.stringify(proxyBase);
   const to = JSON.stringify(targetOrigin);
@@ -58,22 +60,22 @@ function buildInterceptScript(proxyBase: string, targetOrigin: string, targetHre
   const tProtocol = JSON.stringify(targetUrl.protocol);
   return `<script id="__sn_intercept">(function(){
 var PB=${pb},TO=${to},TH=${th};
-/* ── 1. Spoof window.location so SPA routers see the real site URL ── */
+/* ── 1. Location spoof ── */
 try{
-  var fakeLoc={
-    href:TH,origin:TO,protocol:${tProtocol},host:${tHost},hostname:${tHostname},
+  var fL={href:TH,origin:TO,protocol:${tProtocol},host:${tHost},hostname:${tHostname},
     port:'',pathname:${tPathname},search:${tSearch},hash:${tHash},
-    toString:function(){return TH;},
-    assign:function(){},replace:function(){},reload:function(){}
-  };
-  Object.defineProperty(window,'location',{get:function(){return fakeLoc;},configurable:true});
+    toString:function(){return TH;},assign:function(){},replace:function(){},reload:function(){}};
+  Object.defineProperty(window,'location',{get:function(){return fL;},configurable:true});
+  Object.defineProperty(document,'domain',{get:function(){return ${tHostname};},configurable:true});
+  Object.defineProperty(document,'URL',{get:function(){return TH;},configurable:true});
+  Object.defineProperty(document,'referrer',{get:function(){return TH;},configurable:true});
 }catch(e){}
-/* ── 2. Patch fetch/XHR to proxy all requests ── */
+/* ── 2. URL wrap ── */
 function wrap(u){
-  if(typeof u!=='string'||!u)return u;
+  if(!u||typeof u!=='string'||u===TH)return u;
   if(u.indexOf(PB)>=0)return u;
   var p=u.slice(0,5);
-  if(p==='data:'||p==='blob:'||u.slice(0,11)==='javascript:')return u;
+  if(p==='data:'||p==='blob:'||u.slice(0,11)==='javascript:'||u[0]==='#')return u;
   try{
     var a;
     if(/^https?:\\/\\//.test(u)){a=u;}
@@ -83,6 +85,7 @@ function wrap(u){
     return PB+'?url='+encodeURIComponent(a);
   }catch(e){return u;}
 }
+/* ── 3. fetch / XHR ── */
 var _f=window.fetch;
 window.fetch=function(input,init){
   try{
@@ -96,6 +99,40 @@ XMLHttpRequest.prototype.open=function(m,u){
   try{if(u)arguments[1]=wrap(String(u));}catch(e){}
   return _x.apply(this,arguments);
 };
+/* ── 4. Element.setAttribute — catches dynamic script/link injection ── */
+var _sa=Element.prototype.setAttribute;
+Element.prototype.setAttribute=function(name,val){
+  var n=typeof name==='string'?name.toLowerCase():'';
+  if((n==='src'||n==='href')&&typeof val==='string')val=wrap(val);
+  return _sa.call(this,name,val);
+};
+/* ── 5. HTMLScriptElement.src setter — catches webpack chunk loader (Next.js) ── */
+try{
+  var sSrc=Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype,'src');
+  if(sSrc&&sSrc.set){
+    Object.defineProperty(HTMLScriptElement.prototype,'src',{
+      get:sSrc.get,set:function(v){sSrc.set.call(this,wrap(v));},configurable:true
+    });
+  }
+}catch(e){}
+/* ── 6. HTMLLinkElement.href setter — catches dynamic CSS injection ── */
+try{
+  var lHref=Object.getOwnPropertyDescriptor(HTMLLinkElement.prototype,'href');
+  if(lHref&&lHref.set){
+    Object.defineProperty(HTMLLinkElement.prototype,'href',{
+      get:lHref.get,set:function(v){lHref.set.call(this,wrap(v));},configurable:true
+    });
+  }
+}catch(e){}
+/* ── 7. Image src setter ── */
+try{
+  var iSrc=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
+  if(iSrc&&iSrc.set){
+    Object.defineProperty(HTMLImageElement.prototype,'src',{
+      get:iSrc.get,set:function(v){iSrc.set.call(this,wrap(v));},configurable:true
+    });
+  }
+}catch(e){}
 })();</script>`;
 }
 

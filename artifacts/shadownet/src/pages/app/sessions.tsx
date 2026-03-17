@@ -274,14 +274,14 @@ export default function AppSessions() {
                         {/* Action buttons */}
                         <div className="space-y-2 pt-1">
                           <button
-                            onClick={() => window.open(relayResult.targetUrl, "_blank", "noopener,noreferrer")}
+                            onClick={() => window.open(`${BASE}api/proxy?url=${encodeURIComponent(relayResult.targetUrl ?? "")}`, "_blank", "noopener,noreferrer")}
                             className="w-full py-3 bg-primary text-black font-mono font-bold text-xs rounded-lg flex items-center justify-center gap-2 hover:bg-white transition-colors tracking-widest"
                             style={{ boxShadow: "0 0 16px rgba(57,255,20,0.2)" }}>
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            OPEN {relayResult.targetHost?.toUpperCase()}
+                            <Eye className="w-3.5 h-3.5" />
+                            BROWSE VIA RELAY
                           </button>
                           <p className="text-[9px] font-mono text-white/20 text-center">
-                            IP verified masked via relay · Opens in new tab
+                            All traffic routes through relay · Bypasses geo-blocks
                           </p>
                         </div>
                       </div>
