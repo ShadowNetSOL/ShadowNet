@@ -60,19 +60,16 @@ function buildInterceptScript(proxyBase: string, targetOrigin: string, targetHre
   const tProtocol = JSON.stringify(targetUrl.protocol);
   return `<script id="__sn_intercept">(function(){
 var PB=${pb},TO=${to},TH=${th};
-/* ── 1. Location spoof ── */
+/* ── 1. Location spoof — lets SPA routers see the real site URL ── */
 try{
   var fL={href:TH,origin:TO,protocol:${tProtocol},host:${tHost},hostname:${tHostname},
     port:'',pathname:${tPathname},search:${tSearch},hash:${tHash},
     toString:function(){return TH;},assign:function(){},replace:function(){},reload:function(){}};
   Object.defineProperty(window,'location',{get:function(){return fL;},configurable:true});
-  Object.defineProperty(document,'domain',{get:function(){return ${tHostname};},configurable:true});
-  Object.defineProperty(document,'URL',{get:function(){return TH;},configurable:true});
-  Object.defineProperty(document,'referrer',{get:function(){return TH;},configurable:true});
 }catch(e){}
-/* ── 2. URL wrap ── */
+/* ── 2. URL wrap — routes all requests through relay ── */
 function wrap(u){
-  if(!u||typeof u!=='string'||u===TH)return u;
+  if(!u||typeof u!=='string')return u;
   if(u.indexOf(PB)>=0)return u;
   var p=u.slice(0,5);
   if(p==='data:'||p==='blob:'||u.slice(0,11)==='javascript:'||u[0]==='#')return u;
@@ -85,7 +82,7 @@ function wrap(u){
     return PB+'?url='+encodeURIComponent(a);
   }catch(e){return u;}
 }
-/* ── 3. fetch / XHR ── */
+/* ── 3. Patch fetch ── */
 var _f=window.fetch;
 window.fetch=function(input,init){
   try{
@@ -94,45 +91,30 @@ window.fetch=function(input,init){
   }catch(e){}
   return _f.apply(this,arguments);
 };
+/* ── 4. Patch XHR ── */
 var _x=XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open=function(m,u){
   try{if(u)arguments[1]=wrap(String(u));}catch(e){}
   return _x.apply(this,arguments);
 };
-/* ── 4. Element.setAttribute — catches dynamic script/link injection ── */
-var _sa=Element.prototype.setAttribute;
-Element.prototype.setAttribute=function(name,val){
-  var n=typeof name==='string'?name.toLowerCase():'';
-  if((n==='src'||n==='href')&&typeof val==='string')val=wrap(val);
-  return _sa.call(this,name,val);
+/* ── 5. Patch document.createElement to intercept dynamic script/link src ── */
+var _ce=document.createElement.bind(document);
+document.createElement=function(tag){
+  var el=_ce(tag);
+  var t=typeof tag==='string'?tag.toLowerCase():'';
+  if(t==='script'||t==='link'||t==='img'){
+    var attr=t==='link'?'href':'src';
+    var orig=Object.getOwnPropertyDescriptor(el.__proto__,attr)||Object.getOwnPropertyDescriptor(HTMLElement.prototype,attr);
+    if(orig&&orig.set){
+      Object.defineProperty(el,attr,{
+        get:function(){return orig.get?orig.get.call(el):'';},
+        set:function(v){orig.set.call(el,wrap(v));},
+        configurable:true
+      });
+    }
+  }
+  return el;
 };
-/* ── 5. HTMLScriptElement.src setter — catches webpack chunk loader (Next.js) ── */
-try{
-  var sSrc=Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype,'src');
-  if(sSrc&&sSrc.set){
-    Object.defineProperty(HTMLScriptElement.prototype,'src',{
-      get:sSrc.get,set:function(v){sSrc.set.call(this,wrap(v));},configurable:true
-    });
-  }
-}catch(e){}
-/* ── 6. HTMLLinkElement.href setter — catches dynamic CSS injection ── */
-try{
-  var lHref=Object.getOwnPropertyDescriptor(HTMLLinkElement.prototype,'href');
-  if(lHref&&lHref.set){
-    Object.defineProperty(HTMLLinkElement.prototype,'href',{
-      get:lHref.get,set:function(v){lHref.set.call(this,wrap(v));},configurable:true
-    });
-  }
-}catch(e){}
-/* ── 7. Image src setter ── */
-try{
-  var iSrc=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
-  if(iSrc&&iSrc.set){
-    Object.defineProperty(HTMLImageElement.prototype,'src',{
-      get:iSrc.get,set:function(v){iSrc.set.call(this,wrap(v));},configurable:true
-    });
-  }
-}catch(e){}
 })();</script>`;
 }
 
@@ -308,7 +290,7 @@ router.get("/proxy", async (req, res) => {
 
     const finalUrl = upstream.url || targetUrl;
 
-    if (upstream.status === 403 || upstream.status === 429) {
+    if (upstream.status === 403 || upstream.status === 429 || upstream.status === 530 || upstream.status === 1009) {
       return res.status(upstream.status).send(blockedPage(upstream.status, finalUrl));
     }
 

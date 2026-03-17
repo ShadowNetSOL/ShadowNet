@@ -272,7 +272,7 @@ export default function AppSessions() {
                         )}
 
                         {/* Action buttons */}
-                        <div className="space-y-2 pt-1">
+                        <div className="space-y-3 pt-1">
                           <button
                             onClick={() => window.open(`${BASE}api/proxy?url=${encodeURIComponent(relayResult.targetUrl ?? "")}`, "_blank", "noopener,noreferrer")}
                             className="w-full py-3 bg-primary text-black font-mono font-bold text-xs rounded-lg flex items-center justify-center gap-2 hover:bg-white transition-colors tracking-widest"
@@ -280,9 +280,11 @@ export default function AppSessions() {
                             <Eye className="w-3.5 h-3.5" />
                             BROWSE VIA RELAY
                           </button>
-                          <p className="text-[9px] font-mono text-white/20 text-center">
-                            All traffic routes through relay · Bypasses geo-blocks
-                          </p>
+                          <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-3 space-y-1">
+                            <p className="text-[9px] font-mono text-yellow-400/70 leading-relaxed">
+                              <span className="text-yellow-400">NOTE:</span> Your IP is masked (relay IP above is what sites see). However, sites like pump.fun run additional Cloudflare bot-protection that can block data-centre IPs from their API — the HTML may load but content won't populate. Works best with: <span className="text-white/50">solscan.io · birdeye.so · jup.ag · raydium.io</span>
+                            </p>
+                          </div>
                         </div>
                       </div>
                     ) : (
