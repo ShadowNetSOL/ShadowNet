@@ -137,7 +137,7 @@ export default function AppSessions() {
           </motion.div>
         )}
 
-        {/* RELAY VERIFY MODE */}
+        {/* RELAY ACCESS MODE */}
         {mode === "relay" && (
           <motion.div
             key="relay"
@@ -146,32 +146,60 @@ export default function AppSessions() {
             exit={{ opacity: 0, y: -8 }}
             className="space-y-5"
           >
-            <div className="flex items-start gap-3 p-3.5 rounded-lg border border-primary/15 bg-primary/5">
-              <Lock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-              <p className="text-[10px] font-mono text-white/50 leading-relaxed">
-                ShadowNet connects to the target <span className="text-primary">server-side</span>. The site sees our relay node's IP, not yours. We verify the connection and return proof below.
+            {/* Quick direct access — no verification step */}
+            <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3">
+              <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest flex items-center gap-2">
+                <Globe className="w-3.5 h-3.5 text-primary" /> Direct Relay Access
               </p>
+              <p className="text-[10px] font-mono text-white/35 leading-relaxed">
+                Type any geo-blocked or restricted site. Our US relay opens it server-side — your IP is never seen.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={targetUrl}
+                  onChange={e => { setTargetUrl(e.target.value); setUrlError(""); }}
+                  onKeyDown={e => { if (e.key === "Enter" && targetUrl.trim()) { const u = normalize(targetUrl); if (u) window.open(`${BASE}api/proxy?url=${encodeURIComponent(u)}`, "_blank", "noopener,noreferrer"); }}}
+                  placeholder="e.g. pornhub.com or any blocked site"
+                  className="flex-1 bg-black border border-white/15 rounded-lg py-3 px-4 text-white font-mono text-sm placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-colors"
+                />
+                <button
+                  onClick={() => {
+                    const u = normalize(targetUrl);
+                    if (!u) { setUrlError("Enter a URL"); return; }
+                    window.open(`${BASE}api/proxy?url=${encodeURIComponent(u)}`, "_blank", "noopener,noreferrer");
+                  }}
+                  disabled={!targetUrl.trim()}
+                  className="px-4 py-3 bg-primary text-black font-mono font-bold text-xs rounded-lg hover:bg-white transition-colors disabled:opacity-40 tracking-wider whitespace-nowrap"
+                  style={{ boxShadow: "0 0 12px rgba(57,255,20,0.3)" }}
+                >
+                  RELAY →
+                </button>
+              </div>
+              {urlError && <p className="text-xs font-mono text-red-400">{urlError}</p>}
+              {/* Quick picks */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {["pornhub.com","xvideos.com","jup.ag","raydium.io","birdeye.so","solana.com"].map(s => (
+                  <button key={s} onClick={() => { setTargetUrl("https://" + s); setUrlError(""); }}
+                    className="text-[9px] font-mono px-2 py-1 rounded border border-white/8 text-white/35 hover:text-primary hover:border-primary/30 transition-colors">
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {!activeSession && (
               <>
-                {/* Quick picks */}
-                <div className="p-3.5 rounded-lg border border-white/6 bg-white/[0.015]">
-                  <p className="text-[9px] font-mono text-white/25 uppercase tracking-widest mb-2">Quick targets</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {["pump.fun","solana.com","jup.ag","raydium.io","birdeye.so","phantom.app"].map(s => (
-                      <button key={s} onClick={() => { setTargetUrl("https://" + s); setUrlError(""); }}
-                        className="text-[9px] font-mono px-2 py-1 rounded border border-white/8 text-white/35 hover:text-primary hover:border-primary/30 transition-colors">
-                        {s}
-                      </button>
-                    ))}
-                  </div>
+                {/* Divider */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-white/5" />
+                  <p className="text-[9px] font-mono text-white/20 uppercase tracking-widest">Optional: verify relay + get IP proof</p>
+                  <div className="flex-1 h-px bg-white/5" />
                 </div>
-
-                {/* Target URL */}
+                {/* Target URL for verify */}
                 <div className="p-5 rounded-xl border border-white/8 bg-white/[0.02] space-y-3">
                   <label className="flex items-center gap-2 text-[10px] font-mono text-white/40 uppercase tracking-widest">
-                    <Globe className="w-3.5 h-3.5" /> Target Destination
+                    <Shield className="w-3.5 h-3.5" /> Relay Verification
                   </label>
                   <input
                     type="text"

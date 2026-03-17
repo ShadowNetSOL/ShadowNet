@@ -60,12 +60,33 @@ function buildInterceptScript(proxyBase: string, targetOrigin: string, targetHre
   const tProtocol = JSON.stringify(targetUrl.protocol);
   return `<script id="__sn_intercept">(function(){
 var PB=${pb},TO=${to},TH=${th};
-/* ── 1. Location spoof — lets SPA routers see the real site URL ── */
+/* ── 1. Location + navigator + Intl spoof ── */
 try{
   var fL={href:TH,origin:TO,protocol:${tProtocol},host:${tHost},hostname:${tHostname},
     port:'',pathname:${tPathname},search:${tSearch},hash:${tHash},
     toString:function(){return TH;},assign:function(){},replace:function(){},reload:function(){}};
   Object.defineProperty(window,'location',{get:function(){return fL;},configurable:true});
+}catch(e){}
+/* Spoof browser locale so JS geo-detectors see US, not UK */
+try{
+  Object.defineProperty(navigator,'language',{get:function(){return'en-US';},configurable:true});
+  Object.defineProperty(navigator,'languages',{get:function(){return['en-US','en'];},configurable:true});
+}catch(e){}
+/* Spoof Intl timezone → US Eastern */
+try{
+  var _IDTF=Intl.DateTimeFormat;
+  Intl.DateTimeFormat=function(locale,opts){
+    opts=opts||{};
+    if(!opts.timeZone)opts.timeZone='America/New_York';
+    return new _IDTF(locale||'en-US',opts);
+  };
+  Intl.DateTimeFormat.prototype=_IDTF.prototype;
+  Intl.DateTimeFormat.supportedLocalesOf=_IDTF.supportedLocalesOf;
+  /* Also patch resolvedOptions on instances created without our override */
+  var _rO=Intl.DateTimeFormat.prototype.resolvedOptions;
+  Intl.DateTimeFormat.prototype.resolvedOptions=function(){
+    var r=_rO.call(this);r.timeZone='America/New_York';r.locale='en-US';return r;
+  };
 }catch(e){}
 /* ── 2. URL wrap — routes all requests through relay ── */
 function wrap(u){
