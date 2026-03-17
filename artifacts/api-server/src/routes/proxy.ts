@@ -60,12 +60,24 @@ function buildInterceptScript(proxyBase: string, targetOrigin: string, targetHre
   const tProtocol = JSON.stringify(targetUrl.protocol);
   return `<script id="__sn_intercept">(function(){
 var PB=${pb},TO=${to},TH=${th};
-/* ── 1. Location + navigator + Intl spoof ── */
+/* ── 1. Location spoof — also intercepts navigations so they stay in the relay ── */
 try{
-  var fL={href:TH,origin:TO,protocol:${tProtocol},host:${tHost},hostname:${tHostname},
+  var _RL=window.location; /* save real location before overriding */
+  function _nav(v){
+    /* Route any navigation attempt back through our relay */
+    try{var u=wrap(String(v));_RL.replace(u);}catch(ex){}
+  }
+  var fL={origin:TO,protocol:${tProtocol},host:${tHost},hostname:${tHostname},
     port:'',pathname:${tPathname},search:${tSearch},hash:${tHash},
-    toString:function(){return TH;},assign:function(){},replace:function(){},reload:function(){}};
-  Object.defineProperty(window,'location',{get:function(){return fL;},configurable:true});
+    toString:function(){return TH;},
+    assign:function(v){_nav(v);},
+    replace:function(v){_nav(v);},
+    reload:function(){_RL.reload();}};
+  /* href getter returns spoofed URL; setter intercepts navigation */
+  Object.defineProperty(fL,'href',{get:function(){return TH;},set:function(v){_nav(v);},configurable:true,enumerable:true});
+  Object.defineProperty(window,'location',{get:function(){return fL;},set:function(v){_nav(v);},configurable:true});
+  /* document.location is the same object — override it too */
+  try{Object.defineProperty(document,'location',{get:function(){return fL;},set:function(v){_nav(v);},configurable:true});}catch(e2){}
 }catch(e){}
 /* ── Spoof navigator locale (JS geo-detectors check this) ── */
 try{
