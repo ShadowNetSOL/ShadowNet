@@ -175,26 +175,7 @@ export default function AppSessions() {
                 >RELAY →</button>
               </div>
               {urlError && <p className="px-4 pb-2 text-xs font-mono text-red-400">{urlError}</p>}
-              {/* Quick picks */}
-              <div className="px-4 pb-4 space-y-1.5">
-                <p className="text-[8px] font-mono text-white/20 uppercase tracking-widest">Adult &amp; crypto — tap to open via relay</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { label: "pornhub.com", url: "https://www.pornhub.com" },
-                    { label: "xvideos.com", url: "https://www.xvideos.com" },
-                    { label: "xhamster.com", url: "https://xhamster.com" },
-                    { label: "redtube.com",  url: "https://www.redtube.com" },
-                    { label: "birdeye.so",   url: "https://birdeye.so" },
-                    { label: "raydium.io",   url: "https://raydium.io" },
-                  ].map(s => (
-                    <button key={s.label}
-                      onClick={() => window.open(`${BASE}api/proxy?url=${encodeURIComponent(s.url)}`, "_blank", "noopener,noreferrer")}
-                      className="text-[9px] font-mono px-2.5 py-1.5 rounded border border-primary/20 text-primary/70 hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-colors">
-                      ↗ {s.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <p className="px-4 pb-4 text-[8px] font-mono text-white/20 uppercase tracking-widest">Access 18+ &amp; region locked sites via relay</p>
             </div>
 
             {/* ── SECTION 2: STEALTH BROWSE (direct + fingerprint masking) ── */}
@@ -214,25 +195,19 @@ export default function AppSessions() {
                   <span key={p} className="text-[7px] font-mono px-2 py-0.5 rounded-full border border-secondary/20 text-secondary/60">{p}</span>
                 ))}
               </div>
-              {/* Quick picks */}
-              <div className="px-4 pb-4 space-y-1.5">
-                <p className="text-[8px] font-mono text-white/20 uppercase tracking-widest">Tap to open with stealth session</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { label: "google.com",   url: "https://www.google.com" },
-                    { label: "youtube.com",  url: "https://www.youtube.com" },
-                    { label: "twitter.com",  url: "https://twitter.com" },
-                    { label: "reddit.com",   url: "https://www.reddit.com" },
-                    { label: "pump.fun",     url: "https://pump.fun" },
-                    { label: "instagram.com",url: "https://www.instagram.com" },
-                  ].map(s => (
-                    <button key={s.label}
-                      onClick={() => window.open(s.url, "_blank", "noopener,noreferrer")}
-                      className="text-[9px] font-mono px-2.5 py-1.5 rounded border border-secondary/20 text-secondary/70 hover:text-secondary hover:border-secondary/50 hover:bg-secondary/5 transition-colors">
-                      ↗ {s.label}
-                    </button>
-                  ))}
-                </div>
+              {/* URL bar */}
+              <div className="px-4 pb-4 flex gap-2">
+                <input
+                  type="text"
+                  placeholder="enter any site url…"
+                  onKeyDown={e => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value.trim(); if (v) { const u = v.startsWith("http") ? v : "https://" + v; window.open(u, "_blank", "noopener,noreferrer"); (e.target as HTMLInputElement).value = ""; } } }}
+                  className="flex-1 bg-black border border-secondary/20 rounded-lg py-2.5 px-3 text-white font-mono text-xs placeholder:text-white/20 focus:outline-none focus:border-secondary/50 transition-colors"
+                />
+                <button
+                  onClick={e => { const inp = (e.currentTarget.previousElementSibling as HTMLInputElement); const v = inp?.value.trim(); if (v) { const u = v.startsWith("http") ? v : "https://" + v; window.open(u, "_blank", "noopener,noreferrer"); inp.value = ""; } }}
+                  className="px-4 py-2.5 bg-secondary text-white font-mono font-bold text-[10px] rounded-lg hover:bg-secondary/80 transition-colors tracking-wider whitespace-nowrap"
+                  style={{ boxShadow: "0 0 10px rgba(139,92,246,0.3)" }}
+                >OPEN →</button>
               </div>
             </div>
 

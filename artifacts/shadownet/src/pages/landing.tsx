@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { motion, useInView } from "framer-motion";
-import { Shield, Key, Network, ChevronRight, Check, X, Twitter } from "lucide-react";
+import { Shield, Key, Network, ChevronRight, Check, X } from "lucide-react";
+
+const XLogo = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.258 5.631 5.906-5.631zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+  </svg>
+);
 
 /* ─── Particle Grid Background ─── */
 function ParticleGrid() {
@@ -520,8 +526,8 @@ export default function Landing() {
             <Link href="/docs"><span className="hover:text-white transition-colors cursor-pointer">Privacy</span></Link>
             <Link href="/docs"><span className="hover:text-white transition-colors cursor-pointer">Terms</span></Link>
             <Link href="/docs"><span className="hover:text-white transition-colors cursor-pointer">Security</span></Link>
-            <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
-              <Twitter className="w-4 h-4" />
+            <a href="https://x.com/shadownetsol?s=21" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
+              <XLogo className="w-4 h-4" />
             </a>
           </div>
         </div>
