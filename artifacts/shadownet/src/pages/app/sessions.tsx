@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { useGetFingerprintProfile, useGetRelayNodes, useStartStealthSession } from "@workspace/api-client-react";
-import { Shield, RefreshCw, Server, Globe, XCircle, Zap, Lock, CheckCircle, Clock, Wifi, ExternalLink, Eye, Flame } from "lucide-react";
+import { Shield, RefreshCw, Server, Globe, XCircle, Zap, CheckCircle, Clock, Wifi, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
-import PumpViewer from "../../components/PumpViewer";
 
 const BASE = import.meta.env.BASE_URL as string;
 
@@ -22,14 +21,11 @@ interface RelayResult {
   error?: string;
 }
 
-type Mode = "pump" | "relay";
-
 export default function AppSessions() {
   const { data: profile, isLoading: profileLoading, refetch } = useGetFingerprintProfile();
   const { data: nodesData } = useGetRelayNodes();
   const { mutate: startSession, isPending: isStarting, data: activeSession, reset } = useStartStealthSession();
 
-  const [mode, setMode] = useState<Mode>("pump");
   const [selectedNode, setSelectedNode] = useState("");
   const [targetUrl, setTargetUrl] = useState("");
   const [urlError, setUrlError] = useState("");
@@ -92,63 +88,7 @@ export default function AppSessions() {
         <p className="text-xs font-mono text-white/35">Your IP never touches the destination — all traffic routes via our relay node.</p>
       </div>
 
-      {/* Mode tabs */}
-      <div className="flex gap-2 p-1 bg-white/3 rounded-xl border border-white/5">
-        <button
-          onClick={() => setMode("pump")}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-mono text-xs font-bold transition-all ${
-            mode === "pump"
-              ? "bg-primary text-black"
-              : "text-white/40 hover:text-white/70"
-          }`}
-        >
-          <Flame className="w-3.5 h-3.5" />
-          PUMP.FUN
-        </button>
-        <button
-          onClick={() => setMode("relay")}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-mono text-xs font-bold transition-all ${
-            mode === "relay"
-              ? "bg-white/10 text-white border border-white/20"
-              : "text-white/40 hover:text-white/70"
-          }`}
-        >
-          <Shield className="w-3.5 h-3.5" />
-          RELAY VERIFY
-        </button>
-      </div>
-
-      {/* PUMP.FUN MODE */}
-      <AnimatePresence mode="wait">
-        {mode === "pump" && (
-          <motion.div
-            key="pump"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="space-y-4"
-          >
-            {/* Relay proof bar */}
-            <div className="flex items-center gap-2 p-2.5 rounded-lg border border-primary/15 bg-primary/5">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <p className="text-[10px] font-mono text-white/50 flex-1">
-                <span className="text-primary">Relay active</span> — all pump.fun token pages open through our server relay. Your UK IP is never exposed.
-              </p>
-            </div>
-
-            <PumpViewer />
-          </motion.div>
-        )}
-
-        {/* RELAY ACCESS MODE */}
-        {mode === "relay" && (
-          <motion.div
-            key="relay"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="space-y-4"
-          >
+      <div className="space-y-4">
             {/* ── SECTION 1: GEO-RELAY (real US proxy) ── */}
             <div className="rounded-xl border border-primary/25 bg-primary/5 overflow-hidden">
               <div className="px-4 pt-4 pb-3 space-y-1">
@@ -419,9 +359,7 @@ export default function AppSessions() {
                 ))}
               </div>
             )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </div>
     </div>
   );
 }

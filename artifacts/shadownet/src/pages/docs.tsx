@@ -194,10 +194,6 @@ const sections: DocSection[] = [
         heading: "Smart Followers",
         body: "Enter an X handle to see which high-signal accounts follow them. ShadowNet cross-references the follower list against a curated registry of known on-chain traders, analysts, and degen wallets. High overlap with smart-money accounts signals that the market's best performers are watching that account — a strong social alpha indicator.",
       },
-      {
-        heading: "API key setup",
-        body: "For full Intel Hub functionality you need two API keys: a Helius API key (helius.dev) for deep Solana transaction data, and a Twitter API v2 Bearer Token (developer.twitter.com) for full X account analysis. Keys are stored only in your browser session and are never transmitted to ShadowNet's servers beyond the proxied API request.",
-      },
     ],
   },
 ];

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Wallet, Users, Copy, Check, ExternalLink, AlertTriangle, ChevronRight, TrendingUp, Activity, Zap, Star, Clock, Info } from "lucide-react";
+import { Search, Wallet, Users, Copy, Check, ExternalLink, AlertTriangle, ChevronRight, Activity, Zap, Star, Clock } from "lucide-react";
 
 const XLogo = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -272,8 +272,8 @@ function XCAChecker() {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-base font-mono font-bold text-white mb-1">X Account CA Checker</h2>
-        <p className="text-xs font-mono text-white/35">Check if an X account has ever posted contract addresses.</p>
+        <h2 className="text-base font-mono font-bold text-white mb-1">X Account CA Checker & Username History</h2>
+        <p className="text-xs font-mono text-white/35">Check if an X account has posted contract addresses and view their previous username changes.</p>
       </div>
 
       <div className="flex gap-2">
@@ -288,11 +288,6 @@ function XCAChecker() {
           className="px-4 py-3 bg-primary text-black font-mono font-bold text-xs rounded-lg hover:bg-white transition-colors disabled:opacity-40">
           {loading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}><Search className="w-4 h-4" /></motion.div> : <Search className="w-4 h-4" />}
         </button>
-      </div>
-
-      <div className="flex items-start gap-2 p-3 rounded-lg border border-white/5 bg-white/[0.01]">
-        <Info className="w-3.5 h-3.5 text-white/25 shrink-0 mt-0.5" />
-        <p className="text-[10px] font-mono text-white/25 leading-relaxed">Scans recent tweets via a public mirror. Results show CAs from the most recent page of tweets. Add a Twitter API key for full historical search.</p>
       </div>
 
       {error && (
@@ -600,12 +595,6 @@ export default function IntelHub() {
         </motion.div>
       </AnimatePresence>
 
-      {/* API keys note */}
-      <div className="pt-2 border-t border-white/5">
-        <p className="text-[10px] font-mono text-white/20 leading-relaxed">
-          <span className="text-primary/50">API keys unlock full power:</span> Helius (helius.dev) for deep Solana data · Twitter API v2 (developer.twitter.com) for full X analysis.
-        </p>
-      </div>
     </div>
   );
 }
