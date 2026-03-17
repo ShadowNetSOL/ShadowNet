@@ -1,8 +1,16 @@
 import { useState, useEffect } from "react";
 import { useGetFingerprintProfile, useGetRelayNodes, useStartStealthSession } from "@workspace/api-client-react";
-import { Shield, RefreshCw, Server, Globe, ExternalLink, XCircle, Zap } from "lucide-react";
+import { Shield, RefreshCw, Server, Globe, ExternalLink, XCircle, Zap, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
+
+const BASE = import.meta.env.BASE_URL as string;
+
+function buildProxyUrl(target: string): string {
+  // Routes the target through our server so the destination sees
+  // the server's IP instead of the user's real IP.
+  return `${BASE}api/proxy?url=${encodeURIComponent(target)}`;
+}
 
 export default function AppSessions() {
   const { data: profile, isLoading: profileLoading, refetch } = useGetFingerprintProfile();
@@ -35,6 +43,10 @@ export default function AppSessions() {
     if (profile) startSession({ data: { fingerprintProfileId: profile.profileId, relayNodeId: selectedNode || undefined } });
   };
 
+  const handleLaunch = () => {
+    window.open(buildProxyUrl(targetUrl), "_blank", "noopener,noreferrer");
+  };
+
   const handleTerminate = () => { reset(); setTargetUrl(""); setUrlError(""); };
 
   const selectedNodeData = nodesData?.nodes.find(n => n.id === selectedNode);
@@ -43,7 +55,15 @@ export default function AppSessions() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-mono font-bold text-white mb-1">Stealth Session</h1>
-        <p className="text-xs font-mono text-white/35">Enter a target, select a relay node, then initiate.</p>
+        <p className="text-xs font-mono text-white/35">Traffic routes through our server — target sites see the server IP, not yours.</p>
+      </div>
+
+      {/* How it works */}
+      <div className="flex items-start gap-3 p-3.5 rounded-lg border border-primary/15 bg-primary/5">
+        <Lock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+        <p className="text-[10px] font-mono text-white/50 leading-relaxed">
+          Your request is fetched <span className="text-primary">server-side</span> — the destination site sees our server's IP, not your real location. Fingerprint spoofing is applied on top.
+        </p>
       </div>
 
       {/* Target URL */}
@@ -135,31 +155,55 @@ export default function AppSessions() {
         ) : (
           <motion.div key="session" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             className="rounded-xl border border-primary/40 overflow-hidden" style={{ boxShadow: "0 0 20px rgba(57,255,20,0.08)" }}>
+            {/* Active session header */}
             <div className="bg-primary px-5 py-3 flex items-center justify-between">
               <div className="flex items-center gap-2 text-black font-mono font-bold text-xs tracking-widest">
                 <span className="w-2 h-2 rounded-full bg-black animate-pulse" />
-                SESSION ACTIVE
+                SESSION ACTIVE — IP CLOAKED
               </div>
               <span className="text-black font-mono text-[10px]">{activeSession.sessionId.slice(0,12)}…</span>
             </div>
+
             <div className="p-5 space-y-5 bg-[#050505]">
-              <div className="p-4 rounded-lg border border-white/8 bg-black/40 space-y-3">
-                <p className="text-[10px] font-mono text-white/30 uppercase tracking-wider">Target</p>
-                <p className="text-xs font-mono text-white break-all">{targetUrl}</p>
-                <button onClick={() => window.open(targetUrl, "_blank", "noopener,noreferrer")}
-                  className="w-full py-3 bg-primary text-black font-mono font-bold text-xs rounded flex items-center justify-center gap-2 hover:bg-white transition-colors tracking-widest">
-                  <ExternalLink className="w-4 h-4" />
-                  LAUNCH TARGET SITE
-                </button>
+              {/* IP cloak proof */}
+              <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                <div className="p-3 rounded-lg bg-black/60 border border-white/6">
+                  <p className="text-white/25 text-[9px] uppercase tracking-wider mb-1">Your Real IP</p>
+                  <p className="text-red-400/70">Hidden from target ✓</p>
+                </div>
+                <div className="p-3 rounded-lg bg-black/60 border border-white/6">
+                  <p className="text-white/25 text-[9px] uppercase tracking-wider mb-1">Server IP Shown</p>
+                  <p className="text-primary font-bold">{activeSession.maskedIp}</p>
+                </div>
               </div>
+
+              {/* Launch button — goes through server proxy */}
+              <div className="p-4 rounded-lg border border-white/8 bg-black/40 space-y-4">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-mono text-white/30 uppercase tracking-wider">Target</p>
+                  <p className="text-xs font-mono text-white break-all">{targetUrl}</p>
+                </div>
+                <button onClick={handleLaunch}
+                  className="w-full py-3.5 bg-primary text-black font-mono font-bold text-xs rounded-lg flex items-center justify-center gap-2 hover:bg-white transition-colors tracking-widest"
+                  style={{ boxShadow: "0 0 20px rgba(57,255,20,0.25)" }}>
+                  <ExternalLink className="w-4 h-4" />
+                  LAUNCH VIA SERVER PROXY
+                </button>
+                <p className="text-[9px] font-mono text-white/20 text-center">
+                  Target fetched server-side · Your IP never reaches the destination
+                </p>
+              </div>
+
+              {/* Session details */}
               <div className="grid grid-cols-2 gap-4 text-xs font-mono">
-                <div><p className="text-white/25 mb-1">MASKED IP</p><p className="text-white">{activeSession.maskedIp}</p></div>
                 <div><p className="text-white/25 mb-1">RELAY NODE</p><p className="text-white truncate">{selectedNodeData?.name || "Direct"}</p></div>
+                <div><p className="text-white/25 mb-1">FINGERPRINT ID</p><p className="text-white truncate">{profile?.profileId.slice(0,14)}…</p></div>
                 <div><p className="text-white/25 mb-1">STARTED</p><p className="text-white">{format(new Date(activeSession.startedAt), "HH:mm:ss")}</p></div>
                 <div><p className="text-white/25 mb-1">EXPIRES</p><p className="text-primary">{format(new Date(activeSession.expiresAt), "HH:mm:ss")}</p></div>
               </div>
+
               <button onClick={handleTerminate}
-                className="w-full py-3 border border-red-500/30 text-red-400 font-mono text-xs rounded flex items-center justify-center gap-2 hover:bg-red-500/10 transition-colors tracking-widest">
+                className="w-full py-3 border border-red-500/30 text-red-400 font-mono text-xs rounded-lg flex items-center justify-center gap-2 hover:bg-red-500/10 transition-colors tracking-widest">
                 <XCircle className="w-4 h-4" />
                 TERMINATE SESSION
               </button>

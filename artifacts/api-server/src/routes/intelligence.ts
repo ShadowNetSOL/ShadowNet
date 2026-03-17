@@ -82,7 +82,7 @@ async function fetchNitter(path: string): Promise<string | null> {
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // POST /api/intelligence/wallet
-router.post("/api/intelligence/wallet", async (req, res) => {
+router.post("/intelligence/wallet", async (req, res) => {
   const { address } = req.body as { address?: string };
   if (!address?.trim()) return res.status(400).json({ error: "Address required" });
 
@@ -164,7 +164,7 @@ router.post("/api/intelligence/wallet", async (req, res) => {
 });
 
 // POST /api/intelligence/x-ca
-router.post("/api/intelligence/x-ca", async (req, res) => {
+router.post("/intelligence/x-ca", async (req, res) => {
   const { username } = req.body as { username?: string };
   if (!username?.trim()) return res.status(400).json({ error: "Username required" });
 
@@ -230,7 +230,7 @@ router.post("/api/intelligence/x-ca", async (req, res) => {
 });
 
 // POST /api/intelligence/smart-followers
-router.post("/api/intelligence/smart-followers", async (req, res) => {
+router.post("/intelligence/smart-followers", async (req, res) => {
   const { username } = req.body as { username?: string };
   if (!username?.trim()) return res.status(400).json({ error: "Username required" });
 
