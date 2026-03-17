@@ -160,6 +160,31 @@ try{
     },configurable:true});
   }
 }catch(e){}
+/* ── Intercept window.open — any popup/new-tab spawned by page JS also goes
+   through the relay, preventing the original domain from receiving the real IP ── */
+try{
+  var _wOpen=window.open;
+  window.open=function(url,target,features){
+    if(url&&typeof url==='string'&&url.indexOf('data:')!==0&&url.indexOf('blob:')!==0){
+      url=wrap(url);
+    }
+    return _wOpen.call(window,url,target,features);
+  };
+}catch(e){}
+/* ── Intercept anchor clicks — catches target="_blank" links missed by HTML rewrite ── */
+try{
+  document.addEventListener('click',function(e){
+    var el=e.target;
+    while(el&&el.tagName!=='A')el=el.parentElement;
+    if(el&&el.tagName==='A'){
+      var href=el.getAttribute('href');
+      if(href&&href.indexOf('http')===0&&href.indexOf(PB)<0){
+        e.preventDefault();
+        window.open(wrap(href),'_blank','noopener,noreferrer');
+      }
+    }
+  },true);
+}catch(e){}
 /* ── 2. URL wrap — routes all requests through relay ── */
 function wrap(u){
   if(!u||typeof u!=='string')return u;
