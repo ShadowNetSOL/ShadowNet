@@ -152,7 +152,7 @@ export default function AppSessions() {
                 <Globe className="w-3.5 h-3.5 text-primary" /> Direct Relay Access
               </p>
               <p className="text-[10px] font-mono text-white/35 leading-relaxed">
-                Type any geo-blocked or restricted site. Our US relay opens it server-side — your IP is never seen.
+                Type any URL and tap RELAY — or tap a quick-launch site below to open instantly through the US relay.
               </p>
               <div className="flex gap-2">
                 <input
@@ -177,15 +177,29 @@ export default function AppSessions() {
                 </button>
               </div>
               {urlError && <p className="text-xs font-mono text-red-400">{urlError}</p>}
-              {/* Quick picks */}
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {["pornhub.com","xvideos.com","jup.ag","raydium.io","birdeye.so","solana.com"].map(s => (
-                  <button key={s} onClick={() => { setTargetUrl("https://" + s); setUrlError(""); }}
-                    className="text-[9px] font-mono px-2 py-1 rounded border border-white/8 text-white/35 hover:text-primary hover:border-primary/30 transition-colors">
-                    {s}
-                  </button>
-                ))}
+              {/* Quick launch — tap once to open directly through relay */}
+              <div className="space-y-1.5">
+                <p className="text-[9px] font-mono text-white/20 uppercase tracking-widest">Quick launch — tap to open instantly</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {["pornhub.com","xvideos.com","jup.ag","raydium.io","birdeye.so","solana.com"].map(s => (
+                    <button key={s}
+                      onClick={() => window.open(`${BASE}api/proxy?url=${encodeURIComponent("https://" + s)}`, "_blank", "noopener,noreferrer")}
+                      className="text-[9px] font-mono px-2.5 py-1.5 rounded border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-colors">
+                      ↗ {s}
+                    </button>
+                  ))}
+                </div>
               </div>
+            </div>
+            {/* Status callout */}
+            <div className="p-3 rounded-lg border border-white/6 bg-white/3 space-y-1">
+              <p className="text-[10px] font-mono text-white/50 uppercase tracking-widest">What you'll see</p>
+              <p className="text-[10px] font-mono text-white/30 leading-relaxed">
+                <span className="text-primary">Pornhub</span> — if it shows <span className="text-white/60">"I am 18 or older — Enter"</span> that means the relay worked. The UK block says <span className="text-white/60">"Not available in your country"</span>. Click Enter to proceed.
+              </p>
+              <p className="text-[10px] font-mono text-white/30 leading-relaxed">
+                <span className="text-primary">IP proof</span> — the bar at the top of every relay page shows <span className="text-white/60">"IP cloaked via server relay"</span>.
+              </p>
             </div>
 
             {!activeSession && (
