@@ -118,6 +118,48 @@ try{
     navigator.geolocation.watchPosition=function(s,e){if(e)e({code:1,message:'denied'});return 0;};
   }
 }catch(e){}
+/* ── BLOCK SERVICE WORKERS — critical: SW runs below window.fetch, makes
+   direct browser-level requests that bypass our relay entirely, allowing
+   real UK IP to reach geo-check APIs. Kill registration immediately. ── */
+try{
+  if(navigator.serviceWorker){
+    navigator.serviceWorker.register=function(){return Promise.reject(new Error('sw-blocked'));};
+    /* Also unregister any already-active workers from previous sessions */
+    navigator.serviceWorker.getRegistrations&&navigator.serviceWorker.getRegistrations().then(function(regs){
+      regs.forEach(function(r){r.unregister();});
+    });
+  }
+}catch(e){}
+/* ── Spoof Date.prototype.toString / toTimeString — exposes timezone name
+   e.g. "Greenwich Mean Time" even after getTimezoneOffset is spoofed ── */
+try{
+  var _EST_OFFSET=' GMT-0500 (Eastern Standard Time)';
+  var _dTS=Date.prototype.toString;
+  Date.prototype.toString=function(){
+    var s=_dTS.call(this);
+    return s.replace(/GMT[+-]\d{4}\s*\([^)]*\)/,_EST_OFFSET).replace(/GMT[+-]\d{4}/,_EST_OFFSET.split(' (')[0]);
+  };
+  var _dTTS=Date.prototype.toTimeString;
+  Date.prototype.toTimeString=function(){
+    var s=_dTTS.call(this);
+    return s.replace(/GMT[+-]\d{4}\s*\([^)]*\)/,_EST_OFFSET).replace(/GMT[+-]\d{4}/,_EST_OFFSET.split(' (')[0]);
+  };
+}catch(e){}
+/* ── Spoof navigator.userAgentData locale (Chromium-only modern API) ── */
+try{
+  if(navigator.userAgentData){
+    var _uad=navigator.userAgentData;
+    Object.defineProperty(navigator,'userAgentData',{get:function(){
+      return Object.assign(Object.create(Object.getPrototypeOf(_uad)),_uad,{
+        getHighEntropyValues:function(hints){
+          return _uad.getHighEntropyValues(hints).then(function(v){
+            return Object.assign({},v,{timezone:'America/New_York',language:'en-US'});
+          });
+        }
+      });
+    },configurable:true});
+  }
+}catch(e){}
 /* ── 2. URL wrap — routes all requests through relay ── */
 function wrap(u){
   if(!u||typeof u!=='string')return u;
