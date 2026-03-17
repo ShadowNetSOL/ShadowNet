@@ -67,26 +67,56 @@ try{
     toString:function(){return TH;},assign:function(){},replace:function(){},reload:function(){}};
   Object.defineProperty(window,'location',{get:function(){return fL;},configurable:true});
 }catch(e){}
-/* Spoof browser locale so JS geo-detectors see US, not UK */
+/* ── Spoof navigator locale (JS geo-detectors check this) ── */
 try{
   Object.defineProperty(navigator,'language',{get:function(){return'en-US';},configurable:true});
   Object.defineProperty(navigator,'languages',{get:function(){return['en-US','en'];},configurable:true});
 }catch(e){}
-/* Spoof Intl timezone → US Eastern */
+/* ── Spoof Date timezone offset → US Eastern (UTC-5 = 300 min) ── */
+try{
+  Date.prototype.getTimezoneOffset=function(){return 300;};
+}catch(e){}
+/* ── Spoof Intl timezone → US Eastern ── */
 try{
   var _IDTF=Intl.DateTimeFormat;
   Intl.DateTimeFormat=function(locale,opts){
-    opts=opts||{};
+    opts=Object.assign({},opts||{});
     if(!opts.timeZone)opts.timeZone='America/New_York';
     return new _IDTF(locale||'en-US',opts);
   };
   Intl.DateTimeFormat.prototype=_IDTF.prototype;
   Intl.DateTimeFormat.supportedLocalesOf=_IDTF.supportedLocalesOf;
-  /* Also patch resolvedOptions on instances created without our override */
   var _rO=Intl.DateTimeFormat.prototype.resolvedOptions;
   Intl.DateTimeFormat.prototype.resolvedOptions=function(){
     var r=_rO.call(this);r.timeZone='America/New_York';r.locale='en-US';return r;
   };
+}catch(e){}
+/* ── BLOCK WebRTC IP leak — most critical: WebRTC bypasses HTTP proxies ──
+   RTCPeerConnection sends STUN requests directly from the browser, exposing
+   the real IP. We neutralise it by stripping STUN/TURN servers and blocking
+   ICE candidate gathering so no real IP is ever disclosed. ── */
+try{
+  /* Force iceTransportPolicy:'none' on every RTCPeerConnection so the browser
+     never sends STUN/TURN requests — the primary WebRTC IP-leak vector. */
+  var _RPC=window.RTCPeerConnection;
+  if(_RPC){
+    var _RPC2=function(cfg,con){
+      cfg=cfg?Object.assign({},cfg):{};
+      cfg.iceServers=[];
+      cfg.iceTransportPolicy='none';
+      return new _RPC(cfg,con);
+    };
+    _RPC2.prototype=_RPC.prototype;
+    if(_RPC.generateCertificate)_RPC2.generateCertificate=_RPC.generateCertificate.bind(_RPC);
+    window.RTCPeerConnection=_RPC2;
+  }
+}catch(e){}
+/* ── Block navigator.geolocation ── */
+try{
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition=function(s,e){if(e)e({code:1,message:'denied'});};
+    navigator.geolocation.watchPosition=function(s,e){if(e)e({code:1,message:'denied'});return 0;};
+  }
 }catch(e){}
 /* ── 2. URL wrap — routes all requests through relay ── */
 function wrap(u){
