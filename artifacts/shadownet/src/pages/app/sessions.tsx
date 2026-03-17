@@ -57,6 +57,9 @@ export default function AppSessions() {
     try { new URL(url); } catch { setUrlError("Invalid URL — try pump.fun"); return; }
     setTargetUrl(url);
 
+    // Track session count
+    try { localStorage.setItem("sn_sessions", String((parseInt(localStorage.getItem("sn_sessions") ?? "0", 10)) + 1)); } catch {}
+
     if (profile) {
       startSession({ data: { fingerprintProfileId: profile.profileId, relayNodeId: selectedNode || undefined } });
     }
