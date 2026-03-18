@@ -42,6 +42,10 @@ const STRIP_RES = new Set([
 
 const badHosts = new Set<string>();
 
+function hardRedirect(url: string): string {
+  return `<!DOCTYPE html><html><head><script>window.top.location.href = "${url}";</script></head><body style="background:#050505;color:#39FF14;font-family:monospace;padding:40px;">Redirecting to full access mode...</body></html>`;
+}
+
 const SPOOFED_UAS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
@@ -461,7 +465,7 @@ router.get("/proxy", async (req, res) => {
 
     if (badHosts.has(hostname)) {
       console.log("[ShadowNet] Known bad host → bypassing", hostname);
-      return res.redirect(finalUrl);
+      return res.send(hardRedirect(finalUrl));
     }
 
     const shouldBypass =
@@ -473,7 +477,7 @@ router.get("/proxy", async (req, res) => {
     if (shouldBypass) {
       badHosts.add(hostname);
       console.log("[ShadowNet] Auto bypass triggered →", finalUrl);
-      return res.redirect(finalUrl);
+      return res.send(hardRedirect(finalUrl));
     }
 
     res.status(upstream.status);
@@ -504,7 +508,7 @@ router.get("/proxy", async (req, res) => {
         data.includes("request cannot be processed")
       ) {
         console.log("[ShadowNet] JSON block detected → bypassing", targetUrl);
-        return res.redirect(targetUrl);
+        return res.send(hardRedirect(targetUrl));
       }
 
       res.setHeader("Content-Type", "application/json");
@@ -527,13 +531,13 @@ router.get("/proxy", async (req, res) => {
 
       if (isBlocked) {
         console.log("[ShadowNet] Blocked content detected → bypassing", finalUrl);
-        return res.redirect(finalUrl);
+        return res.send(hardRedirect(finalUrl));
       }
 
       // Detect broken apps
       if (text.length < 1000) {
         console.log("[ShadowNet] Empty/broken page → bypassing", finalUrl);
-        return res.redirect(finalUrl);
+        return res.send(hardRedirect(finalUrl));
       }
 
       const rewritten = rewriteHtml(text, finalUrl, proxyBase);
