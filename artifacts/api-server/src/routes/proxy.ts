@@ -40,6 +40,8 @@ const STRIP_RES = new Set([
   "access-control-allow-origin",
 ]);
 
+const badHosts = new Set<string>();
+
 const SPOOFED_UAS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
@@ -455,9 +457,23 @@ router.get("/proxy", async (req, res) => {
     });
 
     const finalUrl = upstream.url || targetUrl;
+    const hostname = new URL(finalUrl).hostname;
 
-    if (upstream.status === 403 || upstream.status === 429 || upstream.status === 530 || upstream.status === 1009) {
-      return res.status(upstream.status).send(blockedPage(upstream.status, finalUrl));
+    if (badHosts.has(hostname)) {
+      console.log("[ShadowNet] Known bad host → bypassing", hostname);
+      return res.redirect(finalUrl);
+    }
+
+    const shouldBypass =
+      upstream.status === 403 ||
+      upstream.status === 429 ||
+      upstream.status === 530 ||
+      upstream.status === 1009;
+
+    if (shouldBypass) {
+      badHosts.add(hostname);
+      console.log("[ShadowNet] Auto bypass triggered →", finalUrl);
+      return res.redirect(finalUrl);
     }
 
     res.status(upstream.status);
@@ -481,6 +497,13 @@ router.get("/proxy", async (req, res) => {
 
     if (contentType.includes("text/html")) {
       const text = await upstream.text();
+
+      // Detect broken JS-heavy apps (like pump.fun)
+      if (text.length < 1000) {
+        console.log("[ShadowNet] Empty/broken page → bypassing", finalUrl);
+        return res.redirect(finalUrl);
+      }
+
       const rewritten = rewriteHtml(text, finalUrl, proxyBase);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.setHeader("Content-Length", Buffer.byteLength(rewritten, "utf-8").toString());

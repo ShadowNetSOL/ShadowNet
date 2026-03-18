@@ -1,0 +1,161 @@
+🧩 GOAL
+
+👉 Add automatic smart routing:
+	•	Proxy works → stay cloaked
+	•	Proxy blocked → auto switch to direct site
+
+⸻
+
+🪜 STEP-BY-STEP (DO EXACTLY THIS)
+
+⸻
+
+✅ STEP 1 — Open your proxy route file
+
+In Replit:
+
+👉 Open the file where you have:
+
+router.get("/proxy", async (req, res) => {
+
+
+⸻
+
+✅ STEP 2 — Find the block handling code
+
+Search for this part:
+
+if (upstream.status === 403 || upstream.status === 429 || upstream.status === 530 || upstream.status === 1009) {
+  return res.status(upstream.status).send(blockedPage(upstream.status, finalUrl));
+}
+
+
+⸻
+
+✏️ STEP 3 — REPLACE it
+
+Delete that whole block and replace with:
+
+const shouldBypass =
+  upstream.status === 403 ||
+  upstream.status === 429 ||
+  upstream.status === 530 ||
+  upstream.status === 1009;
+
+if (shouldBypass) {
+  console.log("[ShadowNet] Auto bypass triggered →", finalUrl);
+  return res.redirect(finalUrl);
+}
+
+
+⸻
+
+✅ STEP 4 — Add broken-site detection (VERY IMPORTANT)
+
+Now scroll down to this section:
+
+if (contentType.includes("text/html")) {
+  const text = await upstream.text();
+
+
+⸻
+
+✏️ MODIFY it to this:
+
+if (contentType.includes("text/html")) {
+  const text = await upstream.text();
+
+  // Detect broken JS-heavy apps (like pump.fun)
+  if (text.length < 1000) {
+    console.log("[ShadowNet] Empty/broken page → bypassing", finalUrl);
+    return res.redirect(finalUrl);
+  }
+
+  const rewritten = rewriteHtml(text, finalUrl, proxyBase);
+
+
+⸻
+
+✅ STEP 5 — (OPTIONAL BUT 🔥) Add auto-learning bad sites
+
+At the top of your file, add:
+
+const badHosts = new Set<string>();
+
+
+⸻
+
+Then find this line:
+
+const finalUrl = upstream.url || targetUrl;
+
+
+⸻
+
+ADD below it:
+
+const hostname = new URL(finalUrl).hostname;
+
+if (badHosts.has(hostname)) {
+  console.log("[ShadowNet] Known bad host → bypassing", hostname);
+  return res.redirect(finalUrl);
+}
+
+
+⸻
+
+Then update your bypass block:
+
+if (shouldBypass) {
+  badHosts.add(hostname);
+  console.log("[ShadowNet] Auto bypass triggered →", finalUrl);
+  return res.redirect(finalUrl);
+}
+
+
+⸻
+
+✅ STEP 6 — Save & Run
+	•	Click Run in Replit
+	•	Wait for server to restart
+
+⸻
+
+🧪 STEP 7 — TEST IT
+
+Test 1 (normal site)
+
+/api/proxy?url=https://example.com
+
+👉 Should:
+	•	Load INSIDE proxy ✅
+
+⸻
+
+Test 2 (pump.fun)
+
+/api/proxy?url=https://pump.fun
+
+👉 Should:
+	•	Instantly redirect to real site ⚡
+	•	Open normally
+	•	Work fully
+
+⸻
+
+Test 3 (repeat pump.fun)
+
+👉 Should bypass instantly (cached in badHosts)
+
+⸻
+
+🎯 WHAT YOU JUST ADDED
+
+You now have:
+
+🧠 Smart routing system
+	•	Detects blocked sites automatically
+	•	Detects broken apps (like pump.fun)
+	•	Learns bad domains over time
+
+⸻
