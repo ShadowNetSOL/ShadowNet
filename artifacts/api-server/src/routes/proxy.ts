@@ -9,12 +9,21 @@ const BLOCKED_PORTS = ["22", "25", "3306", "6379"];
 async function isPrivateIP(hostname: string) {
   try {
     const ips = await dns.lookup(hostname, { all: true });
-    return ips.some(ip =>
-      ip.address.startsWith("10.") ||
-      ip.address.startsWith("192.168.") ||
-      ip.address.startsWith("172.") ||
-      ip.address === "127.0.0.1"
-    );
+    return ips.some(ip => {
+      const addr = ip.address;
+      // Check for private IP ranges (RFC 1918 + loopback)
+      if (addr === "127.0.0.1" || addr === "::1") return true; // loopback
+      if (addr.startsWith("10.")) return true; // 10.0.0.0/8
+      if (addr.startsWith("192.168.")) return true; // 192.168.0.0/16
+      if (addr.startsWith("172.")) {
+        // Only 172.16.0.0 to 172.31.255.255 is private
+        const parts = addr.split(".");
+        const second = parseInt(parts[1], 10);
+        if (second >= 16 && second <= 31) return true;
+      }
+      if (addr.startsWith("169.254.")) return true; // link-local
+      return false;
+    });
   } catch {
     return false;
   }
@@ -64,7 +73,8 @@ function buildProxyBase(req: import("express").Request): string {
 function proxyUrl(href: string, base: string, proxyBase: string): string {
   try {
     const abs = new URL(href, base).toString();
-    if (!ALLOWED.test(abs)) return href;
+    // Rewrite all HTTPS URLs through the proxy
+    if (!abs.startsWith("https://") && !abs.startsWith("http://")) return href;
     return `${proxyBase}?url=${encodeURIComponent(abs)}`;
   } catch {
     return href;
