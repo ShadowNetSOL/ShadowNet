@@ -1,9 +1,38 @@
 import { Router } from "express";
 import * as cheerio from "cheerio";
+import dns from "dns/promises";
 
 const router = Router();
 
-const ALLOWED = /^https?:\/\//i;
+const BLOCKED_PORTS = ["22", "25", "3306", "6379"];
+
+async function isPrivateIP(hostname: string) {
+  try {
+    const ips = await dns.lookup(hostname, { all: true });
+    return ips.some(ip =>
+      ip.address.startsWith("10.") ||
+      ip.address.startsWith("192.168.") ||
+      ip.address.startsWith("172.") ||
+      ip.address === "127.0.0.1"
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function validateUrl(rawUrl: string) {
+  try {
+    const parsed = new URL(rawUrl);
+
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
+    if (BLOCKED_PORTS.includes(parsed.port)) return false;
+    if (await isPrivateIP(parsed.hostname)) return false;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const STRIP_RES = new Set([
   "x-frame-options", "content-security-policy",
@@ -388,11 +417,18 @@ router.get("/proxy", async (req, res) => {
   let targetUrl: string;
   try {
     targetUrl = decodeURIComponent(rawUrl);
-    if (!ALLOWED.test(targetUrl)) throw new Error("blocked protocol");
-    new URL(targetUrl);
+    if (!(await validateUrl(targetUrl))) {
+      return res.status(403).json({ error: "Blocked URL" });
+    }
   } catch {
-    return res.status(400).send("Invalid or disallowed URL");
+    return res.status(403).json({ error: "Blocked URL" });
   }
+
+  // Ephemeral logging
+  console.log("[ShadowNet] Proxy request", {
+    host: new URL(targetUrl).hostname,
+    timestamp: Date.now()
+  });
 
   try {
     const ua = pickUA();
@@ -436,6 +472,9 @@ router.get("/proxy", async (req, res) => {
     res.setHeader("X-Frame-Options", "ALLOWALL");
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "*");
+    res.setHeader("X-ShadowNet-Proxy", "active");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader("X-Content-Type-Options", "nosniff");
 
     const contentType = upstream.headers.get("content-type") ?? "";
     const proxyBase = buildProxyBase(req);

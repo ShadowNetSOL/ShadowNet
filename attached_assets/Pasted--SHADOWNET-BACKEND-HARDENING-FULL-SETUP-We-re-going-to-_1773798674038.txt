@@ -1,0 +1,301 @@
+🚀 SHADOWNET BACKEND HARDENING (FULL SETUP)
+
+We’re going to implement:
+	1.	✅ Secure proxy (SSRF protection)
+	2.	✅ Abuse protection (rate limit + slowdown + limits)
+	3.	✅ Ephemeral logging
+	4.	✅ Header hardening
+	5.	✅ Health endpoint
+	6.	✅ Stability protections
+
+⸻
+
+🧱 STEP 0 — OPEN THE RIGHT FILES
+
+In Replit file explorer:
+
+Open:
+
+artifacts/api-server/src/routes/proxy.ts
+artifacts/api-server/src/index.ts
+
+
+⸻
+
+🧩 STEP 1 — SECURE YOUR PROXY (MOST IMPORTANT)
+
+📂 File:
+
+proxy.ts
+
+
+⸻
+
+🔥 1A. Add THIS at the TOP of the file:
+
+import dns from "dns/promises";
+
+const BLOCKED_PORTS = ["22", "25", "3306", "6379"];
+
+async function isPrivateIP(hostname: string) {
+  const ips = await dns.lookup(hostname, { all: true });
+  return ips.some(ip =>
+    ip.address.startsWith("10.") ||
+    ip.address.startsWith("192.168.") ||
+    ip.address.startsWith("172.") ||
+    ip.address === "127.0.0.1"
+  );
+}
+
+async function validateUrl(rawUrl: string) {
+  try {
+    const parsed = new URL(rawUrl);
+
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
+    if (BLOCKED_PORTS.includes(parsed.port)) return false;
+    if (await isPrivateIP(parsed.hostname)) return false;
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+
+⸻
+
+🔍 1B. Find your OLD validation:
+
+const ALLOWED = /^https?:\/\//i;
+
+❌ DELETE IT
+
+⸻
+
+🔍 1C. Find where URL is checked:
+
+if (!url || typeof url !== "string" || !ALLOWED.test(url))
+
+
+⸻
+
+✅ REPLACE WITH:
+
+if (!url || typeof url !== "string" || !(await validateUrl(url))) {
+  return res.status(403).json({ error: "Blocked URL" });
+}
+
+
+⸻
+
+🧾 STEP 2 — ADD EPHEMERAL LOGGING
+
+Still in proxy.ts
+
+⸻
+
+✅ Add AFTER validation:
+
+console.log("[ShadowNet] Proxy request", {
+  host: new URL(url).hostname,
+  timestamp: Date.now()
+});
+
+
+⸻
+
+🔥 Important:
+	•	Logs activity
+	•	Stores NOTHING permanently
+
+⸻
+
+🛡️ STEP 3 — HEADER HARDENING
+
+Still in proxy.ts
+
+⸻
+
+🔍 Find where you send response (res.send, res.end)
+
+✅ ADD BEFORE IT:
+
+res.setHeader("X-ShadowNet-Proxy", "active");
+res.setHeader("Referrer-Policy", "no-referrer");
+res.setHeader("X-Content-Type-Options", "nosniff");
+
+
+⸻
+
+⚙️ STEP 4 — INSTALL PROTECTION PACKAGES
+
+Open Replit Shell (bottom tab)
+
+Run:
+
+npm install express-rate-limit express-slow-down
+
+
+⸻
+
+🚧 STEP 5 — ABUSE PROTECTION
+
+📂 File:
+
+index.ts
+
+
+⸻
+
+🔝 5A. Add at TOP:
+
+import rateLimit from "express-rate-limit";
+import slowDown from "express-slow-down";
+
+
+⸻
+
+🧠 5B. Add BELOW app creation:
+
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60
+});
+
+const speedLimiter = slowDown({
+  windowMs: 60 * 1000,
+  delayAfter: 20,
+  delayMs: 500
+});
+
+
+⸻
+
+🔗 5C. Apply to routes:
+
+app.use("/proxy", limiter, speedLimiter);
+app.use("/intelligence", limiter);
+
+
+⸻
+
+🧱 STEP 6 — REQUEST SIZE LIMIT
+
+Still in index.ts
+
+⸻
+
+✅ Add:
+
+app.use(express.json({ limit: "1mb" }));
+
+
+⸻
+
+⏱️ STEP 7 — TIMEOUT PROTECTION
+
+Still in index.ts
+
+⸻
+
+✅ Add:
+
+app.use((req, res, next) => {
+  res.setTimeout(10000, () => {
+    res.status(408).send("Request timeout");
+  });
+  next();
+});
+
+
+⸻
+
+💓 STEP 8 — HEALTH ENDPOINT
+
+Still in index.ts
+
+⸻
+
+✅ Add:
+
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    uptime: process.uptime()
+  });
+});
+
+
+⸻
+
+▶️ STEP 9 — RUN YOUR APP
+
+Click Run in Replit
+
+⸻
+
+🧪 STEP 10 — TEST EVERYTHING
+
+⸻
+
+✅ Test 1: Health
+
+Go to:
+
+https://your-replit-url/health
+
+Expected:
+
+{
+  "status": "ok",
+  "uptime": ...
+}
+
+
+⸻
+
+✅ Test 2: Proxy still works
+
+Use your normal UI:
+	•	Stealth session
+	•	Load a site
+
+⸻
+
+✅ Test 3: Try bad URL
+
+Example:
+
+http://127.0.0.1
+
+Should return:
+
+Blocked URL
+
+
+⸻
+
+🎯 FINAL RESULT
+
+You now have:
+
+⸻
+
+🔒 SECURITY
+	•	SSRF protected proxy
+	•	Safe URL validation
+	•	Header hardening
+
+⸻
+
+🚧 ABUSE PROTECTION
+	•	Rate limiting
+	•	Request slowing
+	•	Size limits
+	•	Timeout protection
+
+⸻
+
+🧠 TRUST SIGNALS
+	•	Ephemeral logging
+	•	Health endpoint
