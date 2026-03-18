@@ -40,11 +40,6 @@ const STRIP_RES = new Set([
   "access-control-allow-origin",
 ]);
 
-const badHosts = new Set<string>();
-
-function hardRedirect(url: string): string {
-  return `<!DOCTYPE html><html><head><script>window.top.location.href = "${url}";</script></head><body style="background:#050505;color:#39FF14;font-family:monospace;padding:40px;">Redirecting to full access mode...</body></html>`;
-}
 
 const SPOOFED_UAS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -461,24 +456,6 @@ router.get("/proxy", async (req, res) => {
     });
 
     const finalUrl = upstream.url || targetUrl;
-    const hostname = new URL(finalUrl).hostname;
-
-    if (badHosts.has(hostname)) {
-      console.log("[ShadowNet] Known bad host → bypassing", hostname);
-      return res.send(hardRedirect(finalUrl));
-    }
-
-    const shouldBypass =
-      upstream.status === 403 ||
-      upstream.status === 429 ||
-      upstream.status === 530 ||
-      upstream.status === 1009;
-
-    if (shouldBypass) {
-      badHosts.add(hostname);
-      console.log("[ShadowNet] Auto bypass triggered →", finalUrl);
-      return res.send(hardRedirect(finalUrl));
-    }
 
     res.status(upstream.status);
 
@@ -499,47 +476,14 @@ router.get("/proxy", async (req, res) => {
     const contentType = upstream.headers.get("content-type") ?? "";
     const proxyBase = buildProxyBase(req);
 
-    // Handle JSON responses (pump.fun returns JSON blocks)
     if (contentType.includes("application/json")) {
       const data = await upstream.text();
-
-      if (
-        data.includes("access_denied") ||
-        data.includes("request cannot be processed")
-      ) {
-        console.log("[ShadowNet] JSON block detected → bypassing", targetUrl);
-        return res.send(hardRedirect(targetUrl));
-      }
-
       res.setHeader("Content-Type", "application/json");
       return res.send(data);
     }
 
     if (contentType.includes("text/html")) {
       const text = await upstream.text();
-
-      const lower = text.toLowerCase();
-
-      // Detect bot protection / blocked pages
-      const isBlocked =
-        lower.includes("access_denied") ||
-        lower.includes("request cannot be processed") ||
-        lower.includes("cloudflare") ||
-        lower.includes("attention required") ||
-        lower.includes("captcha") ||
-        lower.includes("blocked");
-
-      if (isBlocked) {
-        console.log("[ShadowNet] Blocked content detected → bypassing", finalUrl);
-        return res.send(hardRedirect(finalUrl));
-      }
-
-      // Detect broken apps
-      if (text.length < 1000) {
-        console.log("[ShadowNet] Empty/broken page → bypassing", finalUrl);
-        return res.send(hardRedirect(finalUrl));
-      }
-
       const rewritten = rewriteHtml(text, finalUrl, proxyBase);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.setHeader("Content-Length", Buffer.byteLength(rewritten, "utf-8").toString());
