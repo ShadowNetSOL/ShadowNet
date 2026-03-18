@@ -495,10 +495,42 @@ router.get("/proxy", async (req, res) => {
     const contentType = upstream.headers.get("content-type") ?? "";
     const proxyBase = buildProxyBase(req);
 
+    // Handle JSON responses (pump.fun returns JSON blocks)
+    if (contentType.includes("application/json")) {
+      const data = await upstream.text();
+
+      if (
+        data.includes("access_denied") ||
+        data.includes("request cannot be processed")
+      ) {
+        console.log("[ShadowNet] JSON block detected → bypassing", targetUrl);
+        return res.redirect(targetUrl);
+      }
+
+      res.setHeader("Content-Type", "application/json");
+      return res.send(data);
+    }
+
     if (contentType.includes("text/html")) {
       const text = await upstream.text();
 
-      // Detect broken JS-heavy apps (like pump.fun)
+      const lower = text.toLowerCase();
+
+      // Detect bot protection / blocked pages
+      const isBlocked =
+        lower.includes("access_denied") ||
+        lower.includes("request cannot be processed") ||
+        lower.includes("cloudflare") ||
+        lower.includes("attention required") ||
+        lower.includes("captcha") ||
+        lower.includes("blocked");
+
+      if (isBlocked) {
+        console.log("[ShadowNet] Blocked content detected → bypassing", finalUrl);
+        return res.redirect(finalUrl);
+      }
+
+      // Detect broken apps
       if (text.length < 1000) {
         console.log("[ShadowNet] Empty/broken page → bypassing", finalUrl);
         return res.redirect(finalUrl);
