@@ -31,7 +31,6 @@ export default function AppSessions() {
   const [urlError, setUrlError] = useState("");
   const [relayResult, setRelayResult] = useState<RelayResult | null>(null);
   const [relayLoading, setRelayLoading] = useState(false);
-  const [stealthUrl, setStealthUrl] = useState("");
 
   useEffect(() => {
     if (nodesData?.nodes && !selectedNode) {
@@ -144,30 +143,15 @@ export default function AppSessions() {
                 <input
                   type="text"
                   placeholder="enter any site url…"
-                  onKeyDown={e => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value.trim(); if (v) { const u = v.startsWith("http") ? v : "https://" + v; setStealthUrl(u); (e.target as HTMLInputElement).value = ""; } } }}
+                  onKeyDown={e => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value.trim(); if (v) { const u = v.startsWith("http") ? v : "https://" + v; window.open(u, "_blank", "noopener,noreferrer"); (e.target as HTMLInputElement).value = ""; } } }}
                   className="flex-1 bg-black border border-secondary/20 rounded-lg py-2.5 px-3 text-white font-mono text-xs placeholder:text-white/20 focus:outline-none focus:border-secondary/50 transition-colors"
                 />
                 <button
-                  onClick={e => { const inp = (e.currentTarget.previousElementSibling as HTMLInputElement); const v = inp?.value.trim(); if (v) { const u = v.startsWith("http") ? v : "https://" + v; setStealthUrl(u); inp.value = ""; } }}
+                  onClick={e => { const inp = (e.currentTarget.previousElementSibling as HTMLInputElement); const v = inp?.value.trim(); if (v) { const u = v.startsWith("http") ? v : "https://" + v; window.open(u, "_blank", "noopener,noreferrer"); inp.value = ""; } }}
                   className="px-4 py-2.5 bg-secondary text-white font-mono font-bold text-[10px] rounded-lg hover:bg-secondary/80 transition-colors tracking-wider whitespace-nowrap"
                   style={{ boxShadow: "0 0 10px rgba(139,92,246,0.3)" }}
                 >OPEN →</button>
               </div>
-              {stealthUrl && (
-                <div className="px-4 pb-4 space-y-2">
-                  <div className="flex items-center justify-between text-[9px] font-mono text-secondary/60">
-                    <span>Browsing with fingerprint spoofing</span>
-                    <button onClick={() => setStealthUrl("")} className="text-secondary/40 hover:text-secondary">✕ Close</button>
-                  </div>
-                  <iframe
-                    src={`${BASE}api/proxy?url=${encodeURIComponent(stealthUrl)}`}
-                    className="w-full bg-black border border-secondary/20 rounded-lg"
-                    style={{ height: "60vh" }}
-                    sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popup-escape allow-presentation"
-                    allow="microphone; camera; geolocation"
-                  />
-                </div>
-              )}
             </div>
 
             {!activeSession && (

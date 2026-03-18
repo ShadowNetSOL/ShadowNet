@@ -488,33 +488,6 @@ router.get("/proxy", async (req, res) => {
 
     if (contentType.includes("application/json")) {
       const data = await upstream.text();
-
-      // Check if JSON contains an error (like pump.fun's access_denied)
-      if (data.includes("error") && (data.includes("access_denied") || data.includes("request cannot be processed"))) {
-        console.log("[ShadowNet] JSON error detected → showing direct access option", finalUrl);
-        return res.send(`<!DOCTYPE html><html><head><style>
-body{font-family:monospace;background:#050505;color:#39FF14;padding:0;margin:0}
-#bar{position:fixed;top:0;left:0;right:0;height:40px;background:#050505;border-bottom:1px solid rgba(57,255,20,0.3);display:flex;align-items:center;padding:0 16px;gap:8px;font-size:11px;}
-.dot{width:6px;height:6px;border-radius:50%;background:#39FF14;animation:p 1.5s infinite;}@keyframes p{0%,100%{opacity:1}50%{opacity:0.3}}
-.wrap{padding:80px 40px 40px;max-width:560px;margin:0 auto}
-h2{color:#39FF14;font-size:18px;margin:0 0 12px}
-p{color:rgba(255,255,255,0.5);font-size:12px;line-height:1.8;margin:0 0 8px}
-.tag{display:inline-block;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);color:#8B5CF6;padding:2px 8px;border-radius:4px;font-size:9px;letter-spacing:0.08em;margin-bottom:16px}
-.btn{margin-top:20px;padding:12px 24px;background:#39FF14;color:#000;font-family:monospace;font-weight:bold;font-size:11px;border:none;cursor:pointer;border-radius:6px;letter-spacing:0.05em;text-decoration:none;display:inline-block}
-.btn:hover{background:#fff}
-</style></head><body>
-<div id="bar"><span class="dot"></span><b style="color:rgba(57,255,20,0.9);letter-spacing:0.08em">SHADOWNET</b><span style="color:rgba(255,255,255,0.15)">|</span><span style="color:rgba(255,255,255,0.4)">Relay restricted</span></div>
-<div class="wrap">
-  <div class="tag">RELAY BLOCKED</div>
-  <h2>This Site Blocks Server Relays</h2>
-  <p style="color:rgba(255,255,255,0.2);font-size:10px;word-break:break-all;margin-bottom:16px">${finalUrl}</p>
-  <p>This site (like pump.fun) blocks traffic from shared server IPs. Your real IP was never exposed — the block happened at their server, not your device.</p>
-  <p style="margin-top:20px;color:rgba(255,255,255,0.25);font-size:11px">Use direct access to visit this site:</p>
-  <a href="${finalUrl}" target="_blank" class="btn">OPEN DIRECTLY</a>
-  <p style="margin-top:16px;font-size:10px;color:rgba(255,255,255,0.2)">← Your real IP will be exposed when you click this</p>
-</div></body></html>`);
-      }
-
       res.setHeader("Content-Type", "application/json");
       return res.send(data);
     }
