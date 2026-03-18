@@ -4,21 +4,77 @@ import dns from "dns/promises";
 
 const router = Router();
 
+// 🧠 ShadowNet intelligence tracking
+const intel = new Map<string, {
+  success: number;
+  fails: number;
+  lastAccess: number;
+}>();
+// 🧠 Relay performance tracking
+const relayStats = new Map<string, { success: number; fails: number; lastUsed: number; avgLatency: number }>();
+
+function updateRelayStats(relay: string, success: boolean, latency: number) {
+  const entry = relayStats.get(relay) || { success: 0, fails: 0, lastUsed: 0, avgLatency: 0 };
+  if (success) {
+    entry.success++;
+    // Simple running average for latency
+    entry.avgLatency = entry.avgLatency
+      ? (entry.avgLatency * (entry.success - 1) + latency) / entry.success
+      : latency;
+  } else {
+    entry.fails++;
+  }
+  entry.lastUsed = Date.now();
+  relayStats.set(relay, entry);
+}
+
 const BLOCKED_PORTS = ["22", "25", "3306", "6379"];
+const ALLOWED = /^https?:\/\//i;
+// ── ShadowNet relay nodes ──
+const RELAYS = [
+  "/api/proxy", // your main server
+
+  // 🌐 Public test relays (temporary)
+  "https://api.allorigins.win/raw?url=",
+  "https://thingproxy.freeboard.io/fetch/",
+  "https://corsproxy.io/?"
+];
+
+function pickRelaySmart(): string {
+  // Prefer relays with success history, low fails, and fastest avg latency
+  const sorted = [...RELAYS].sort((a, b) => {
+    const ra = relayStats.get(a) || { success: 0, fails: 0, avgLatency: Infinity };
+    const rb = relayStats.get(b) || { success: 0, fails: 0, avgLatency: Infinity };
+    
+    // Failures penalise heavily
+    const scoreA = ra.success - ra.fails - ra.avgLatency / 1000;
+    const scoreB = rb.success - rb.fails - rb.avgLatency / 1000;
+    return scoreB - scoreA;
+  });
+
+  // Pick top-ranked relay
+  return sorted[0] || RELAYS[0];
+}
 
 async function isPrivateIP(hostname: string) {
   try {
     const ips = await dns.lookup(hostname, { all: true });
-    return ips.some(ip =>
-      ip.address.startsWith("10.") ||
-      ip.address.startsWith("192.168.") ||
-      ip.address.startsWith("172.") ||
-      ip.address === "127.0.0.1"
-    );
+
+    function isPrivateIPRange(ip: string) {
+      return (
+        ip.startsWith("10.") ||
+        ip.startsWith("192.168.") ||
+        ip === "127.0.0.1" ||
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)
+      );
+    }
+
+    return ips.some(ip => isPrivateIPRange(ip.address));
   } catch {
     return false;
   }
 }
+  
 
 async function validateUrl(rawUrl: string) {
   try {
@@ -64,7 +120,25 @@ function proxyUrl(href: string, base: string, proxyBase: string): string {
   try {
     const abs = new URL(href, base).toString();
     if (!ALLOWED.test(abs)) return href;
-    return `${proxyBase}?url=${encodeURIComponent(abs)}`;
+
+    const relay = proxyBase;
+
+    // 🧠 Handle different relay formats
+    if (relay.includes("allorigins")) {
+      return `${relay}${encodeURIComponent(abs)}`;
+    }
+
+    if (relay.includes("thingproxy")) {
+      return `${relay}${abs}`;
+    }
+
+    if (relay.includes("corsproxy")) {
+      return `${relay}${abs}`;
+    }
+
+    // default (your own proxy)
+    return `${relay}?url=${encodeURIComponent(abs)}`;
+
   } catch {
     return href;
   }
@@ -432,29 +506,90 @@ router.get("/proxy", async (req, res) => {
 
   try {
     const ua = pickUA();
-    const upstream = await fetch(targetUrl, {
+
+let upstream;
+let lastError;
+let chosenRelay = "";
+
+const sortedRelays = [...RELAYS].sort((a, b) => {
+  const ra = relayStats.get(a) || { success: 0, fails: 0, avgLatency: Infinity };
+  const rb = relayStats.get(b) || { success: 0, fails: 0, avgLatency: Infinity };
+
+  const scoreA = ra.success - ra.fails - ra.avgLatency / 1000;
+  const scoreB = rb.success - rb.fails - rb.avgLatency / 1000;
+
+  return scoreB - scoreA;
+});
+
+for (const relay of sortedRelays) {
+
+  const start = Date.now();
+
+  try {
+    let fetchUrl = targetUrl;
+
+    if (!relay.startsWith("/")) {
+      if (relay.includes("allorigins")) {
+        fetchUrl = `${relay}${encodeURIComponent(targetUrl)}`;
+      } else {
+        fetchUrl = `${relay}${targetUrl}`;
+      }
+    }
+
+    const resFetch = await fetch(fetchUrl, {
       method: "GET",
       redirect: "follow",
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(10000),
       headers: {
         "User-Agent": ua,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "identity",
-        "Cache-Control": "max-age=0",
-        "DNT": "1",
-        "Upgrade-Insecure-Requests": "1",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Sec-CH-UA": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-        "Sec-CH-UA-Mobile": "?0",
-        "Sec-CH-UA-Platform": '"Windows"',
       },
     });
 
+    const duration = Date.now() - start;
+
+    if (resFetch && resFetch.ok) {
+      upstream = resFetch;
+      chosenRelay = relay;
+      updateRelayStats(relay, true, duration);
+      break;
+    } else {
+      updateRelayStats(relay, false, duration);
+    }
+
+  } catch (err) {
+    const duration = Date.now() - start;
+    updateRelayStats(relay, false, duration);
+    lastError = err;
+  }
+}
+
+// ❌ If ALL relays fail
+if (!upstream) {
+  throw lastError || new Error("All relays failed");
+}
+
+// ✅ Build correct proxy base from chosen relay
+let proxyBase: string;
+
+if (chosenRelay.startsWith("/")) {
+  proxyBase = buildProxyBase(req); // your server
+} else {
+  proxyBase = chosenRelay; // external relay
+}
+
+// Check size AFTER fetch
+const contentLength = Number(upstream.headers.get("content-length") || 0);
+if (contentLength > 5_000_000) {
+  return res.status(413).send("Response too large");
+}
     const finalUrl = upstream.url || targetUrl;
+const host = new URL(targetUrl).hostname;
+const entry = intel.get(host) || { success: 0, fails: 0, lastAccess: 0 };
+entry.success++;
+entry.lastAccess = Date.now();
+intel.set(host, entry);
 
     if (upstream.status === 403 || upstream.status === 429 || upstream.status === 530 || upstream.status === 1009) {
       return res.status(upstream.status).send(blockedPage(upstream.status, finalUrl));
@@ -477,8 +612,7 @@ router.get("/proxy", async (req, res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
 
     const contentType = upstream.headers.get("content-type") ?? "";
-    const proxyBase = buildProxyBase(req);
-
+   
     if (contentType.includes("text/html")) {
       const text = await upstream.text();
       const rewritten = rewriteHtml(text, finalUrl, proxyBase);
@@ -503,7 +637,14 @@ router.get("/proxy", async (req, res) => {
     return res.send(Buffer.from(buf));
 
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
+    try {
+  const host = rawUrl ? new URL(decodeURIComponent(rawUrl)).hostname : "unknown";
+  const entry = intel.get(host) || { success: 0, fails: 0, lastAccess: 0 };
+  entry.fails++;
+  entry.lastAccess = Date.now();
+  intel.set(host, entry);
+} catch {}
+const msg = err instanceof Error ? err.message : "Unknown error";
     const isTimeout = msg.includes("timeout") || msg.includes("TimeoutError");
     const code = isTimeout ? 504 : 502;
     const label = isTimeout ? "Gateway Timeout" : "Proxy Error";
