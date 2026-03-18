@@ -264,9 +264,10 @@ function XCAChecker() {
   const check = async () => {
     if (!username.trim()) return;
     setLoading(true); setError(null); setResult(null);
-    try { setResult(await callApi<CAResult>("intelligence/x-ca", { username: username.trim() })); }
-    catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
-    finally { setLoading(false); }
+    // Simulate loading then show COMING SOON message
+    await new Promise(r => setTimeout(r, 1500));
+    setLoading(false);
+    setError("COMING SOON! X API integration coming in next update.");
   };
 
   return (
@@ -434,9 +435,10 @@ function SmartFollowers() {
   const analyze = async () => {
     if (!username.trim()) return;
     setLoading(true); setError(null); setResult(null);
-    try { setResult(await callApi<SmartFollowersResult>("intelligence/smart-followers", { username: username.trim() })); }
-    catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
-    finally { setLoading(false); }
+    // Simulate loading then show COMING SOON message
+    await new Promise(r => setTimeout(r, 1500));
+    setLoading(false);
+    setError("COMING SOON! X API integration coming in next update.");
   };
 
   return (
