@@ -9,7 +9,7 @@
 ![Solana](https://img.shields.io/badge/Solana-mainnet-success)
 
 **Privacy-native access layer for Web3**  
-Interact with decentralized applications without exposing your identity, location, or device fingerprint.
+Interact with decentralized applications while reducing direct exposure of your IP, session data, and device fingerprint.
 
 [![🌐 Get Started](https://img.shields.io/badge/Get_Started-app--shadownet.net-brightgreen?style=for-the-badge)](https://app-shadownet.net)
 
@@ -24,7 +24,7 @@ Interact with decentralized applications without exposing your identity, locatio
 
 - 🔐 **Stealth Sessions** – randomized fingerprints, isolated sessions, IP cloaking  
 - 🧩 **Anonymous Solana Wallets** – Ed25519 keypairs, zero retention  
-- 🌐 **Global Relay Network** – audited, no-log traffic nodes  
+- 🌐 **Global Relay Network** – relay-based routing infrastructure (centrally operated in current version)
 - 🕵️ **Intel Hub** – on-chain + social intelligence for anonymous due diligence  
 - ⚡ **User-friendly** – clean interface, full Web3 compatibility  
 
@@ -40,7 +40,7 @@ Interact with decentralized applications without exposing your identity, locatio
 
 **ShadowNet** is a **privacy-native access layer for the decentralized web**. It empowers individuals, researchers, and builders to interact with **Web3 applications and the open internet** without exposing their **identity, location, or device fingerprint**. 
 
-ShadowNet combines four independent modules — **stealth sessions, anonymous wallets, a global relay network, and on-chain intelligence (Intel Hub)** — to deliver a **comprehensive, zero-data-retention privacy stack**.
+ShadowNet combines four independent modules — **stealth sessions, anonymous wallets, a global relay network, and on-chain intelligence (Intel Hub)** — to deliver a **comprehensive, privacy-focused session and relay architecture**.
 
 ### 🌟 Core Features
 
@@ -54,12 +54,12 @@ ShadowNet combines four independent modules — **stealth sessions, anonymous wa
 #### 2. Anonymous Wallet Generation
 - Generates **Solana Ed25519 keypairs** via **BIP-39 mnemonics**.  
 - Fully compatible with **Phantom and other Solana wallets**.  
-- **Zero retention**: keys exist in memory only.  
+- ** Keys are generated per session and not intended for persistent storage within the platform. Users are responsible for secure handling.
 - **Importing:** Copy private key → Phantom → Add / Connect Wallet → Import Private Key → paste.  
 - **Security guidance:** Store keys offline or encrypted; ShadowNet cannot recover lost keys.
 
 #### 3. Global Relay Network
-- **Curated network of audited, no-log nodes**.  
+- **Curated network of relay-based routing infrastructure (centrally operated in current version)**.  
 - Select nodes by **latency, geographic location, or jurisdiction**.  
 - Node status: online, maintenance, offline; auto-refresh available.  
 - Destination servers only see relay IP, never your real IP.
@@ -83,15 +83,17 @@ Modern tracking infrastructure is highly sophisticated. Websites track users via
 - **On-chain & social intelligence analysis without revealing identity**
 
 > **Not just a VPN. The entire stack.**  
-> ShadowNet hides your **device, session, keys, and identity**, providing **true anonymous access to Web3**.
+> ShadowNet is designed to minimise exposure across device, session, and network layers*, providing ** enhanced privacy access to Web3 environments**.
 
 ---
 
 ### 🛡 Security & Architecture
 
-- **Zero Retention:** No session data, keys, or connection logs are ever stored.  
+- **Minimal Data Retention:** ShadowNet is designed to avoid persisting sensitive session data  
+- **Session Isolation:** Sandboxed browsing reduces cross-session tracking  
+- **Relay Model:** Requests are routed through a controlled proxy layer  
+- **Transparency:** System behaviour and limitations are documented in the codebase    
 - **Session Isolation:** Sandboxed browsing prevents cross-session correlation.  
-- **Independent Audits:** All relay nodes audited for logging and security.  
 - **Client-side Keys:** Wallet keypairs generated server-side, transmitted once over TLS, no copy retained.
 
 ---
