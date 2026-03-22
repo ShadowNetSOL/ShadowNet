@@ -1,5 +1,14 @@
 # 🌑 ShadowNet
+## ⚠️ Experimental Project Notice
 
+ShadowNet is an experimental privacy-focused platform currently under active development.
+
+- Relay infrastructure is in progress and not yet independently audited
+- Public relay services are used temporarily as fallback nodes
+- Privacy features aim to reduce tracking, but do not guarantee anonymity
+- This project should not be relied on for sensitive or high-risk use cases
+
+For full details, see RELAYS.md and SECURITY.md.
 <!-- Hero Section -->
 ![Hero Banner](https://ibb.co/Df0KnTh2)  
 ![Gradient Hero](https://img.shields.io/badge/ShadowNet-Privacy--Focused-blueviolet?style=for-the-badge&logo=blockchain)
@@ -110,6 +119,17 @@ Modern tracking infrastructure is highly sophisticated. Websites track users via
 </div>
 
 ---
+## 🔐 Security Model
+
+ShadowNet includes several defensive mechanisms:
+
+- URL validation and protocol enforcement
+- Private IP range blocking (SSRF protection)
+- Rate limiting and request throttling
+- Timeout protection for outbound requests
+- Header sanitisation and controlled response handling
+
+See SECURITY.md for full details and limitations.
 
 ## 📦 Getting Started
 
