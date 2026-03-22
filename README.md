@@ -33,7 +33,12 @@ For details on relay infrastructure, see RELAYS.md
 
 - 🔐 **Stealth Sessions** – randomized fingerprints, isolated sessions, IP cloaking  
 - 🧩 **Anonymous Solana Wallets** – Ed25519 keypairs, zero retention  
-- 🌐 **Global Relay Network** – relay-based routing infrastructure (centrally operated in current version)
+- 🌐 **Global Relay Network** 
+- **Hybrid relay system (temporary public + planned private nodes)**
+- Public relay endpoints are used during early development
+- Dedicated ShadowNet relay infrastructure is currently in development
+- Future releases will introduce independently audited, no-log relay nodes
+- - Some relay endpoints may be rate-limited or unavailable depending on external providers
 - 🕵️ **Intel Hub** – on-chain + social intelligence for anonymous due diligence  
 - ⚡ **User-friendly** – clean interface, full Web3 compatibility  
 
@@ -56,7 +61,7 @@ ShadowNet combines four independent modules — **stealth sessions, anonymous wa
 #### 1. Stealth Sessions
 - Fully sandboxed sessions with **fresh randomized fingerprints**. 
 - Randomized attributes: **user-agent, screen resolution, color depth, timezone, language, platform, WebGL strings, canvas hash, audio hash, font list**.  
-- Traffic routed via **audited relay nodes**, masking your real IP.  
+- Traffic routed via **relay nodes**, masking your real IP.  
 - **Session isolation** prevents cookies, cache, or storage from leaking across sessions.  
 - **How to use:** Stealth Sessions → enter target URL → select relay node → **INITIATE STEALTH** → **LAUNCH TARGET SITE**. Session lasts up to one hour.
 
