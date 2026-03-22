@@ -10,7 +10,7 @@
 
 **Privacy-native access layer for Web3**  
 Interact with decentralized applications while reducing direct exposure of your IP, session data, and device fingerprint.
-
+For details on relay infrastructure, see RELAYS.md
 [![🌐 Get Started](https://img.shields.io/badge/Get_Started-app--shadownet.net-brightgreen?style=for-the-badge)](https://app-shadownet.net)
 
 ---
