@@ -78,12 +78,14 @@ Note: Standard server logs (e.g. request metadata) may still exist depending on 
 - No session-level tracking or user identifiers are implemented  
 ⸻
 
-⚠️ Known Limitations
-	•	Relay-based architecture introduces a trusted intermediary (server)
-	•	Full anonymity is not guaranteed
-	•	Some modern websites may bypass or break under proxy rewriting
-	•	External relay endpoints (if used) are not controlled or audited
+⚠️ ## Known Limitations
 
+- Relay-based architecture introduces a trusted intermediary (server)
+- Full anonymity is not guaranteed
+- Some modern websites may bypass or break under proxy rewriting
+- External/public relay endpoints are used temporarily and are not controlled or audited
+- Dedicated ShadowNet relay infrastructure is still in development and not independently audited
+- Proxy-based architecture requires trust in the server layer
 ⸻
 
 🔐 Cryptographic & Key Management
