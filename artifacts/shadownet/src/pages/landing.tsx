@@ -146,8 +146,8 @@ const capabilities = [
   {
     icon: Network,
     title: "Relay Network",
-    desc: "A curated registry of independently audited relay nodes across 12+ countries. Each node verified for no-logging compliance, security hardening, and uptime. Select by latency or jurisdiction.",
-    tags: ["Audited Nodes", "No-Log Verified", "Global Coverage"],
+    desc: "A curated registry of relay nodes across 12+ countries. Each nodefor no-logging compliance, security hardening, and uptime. Select by latency or jurisdiction.",
+    tags: [" Nodes", "Global Coverage"],
     color: "primary",
   },
   {
@@ -162,7 +162,6 @@ const capabilities = [
 const architecturePillars = [
   { title: "Zero Retention", body: "No session data, wallet keys, or connection logs are persisted anywhere. Every record is ephemeral by design." },
   { title: "Session Isolation", body: "Each stealth session runs in a sandboxed context. Cookies, cache, and local storage never carry over between sessions." },
-  { title: "Independent Audits", body: "Every relay node in the ShadowNet registry undergoes third-party security audits for logging policies and network isolation." },
   { title: "Client-Side Keys", body: "Wallet keypairs are generated server-side and transmitted once over TLS. ShadowNet holds no copy after the response is delivered." },
 ];
 
@@ -172,7 +171,7 @@ const comparisonRows = [
   { feature: "Session Isolation", shadownet: true, vpn: false, browser: false },
   { feature: "Anonymous Wallet Generation", shadownet: true, vpn: false, browser: false },
   { feature: "No Server-Side Data Retention", shadownet: true, vpn: false, browser: false },
-  { feature: "Audited Infrastructure", shadownet: true, vpn: false, browser: false },
+  { feature: " Infrastructure", shadownet: true, vpn: false, browser: false },
   { feature: "Web3 / dApp Optimized", shadownet: true, vpn: false, browser: false },
   { feature: "On-Chain Intel Hub", shadownet: true, vpn: false, browser: false },
 ];
