@@ -11,43 +11,35 @@ interface FaqItem {
 const faqs: FaqItem[] = [
   {
     q: "What is ShadowNet?",
-    a: "ShadowNet is a privacy-first Web3 access layer designed for anonymous interaction with decentralized applications and the open web. It combines stealth browsing sessions with hardware-level fingerprint spoofing, anonymous Solana keypair generation, and a curated network of audited relay nodes — giving you verifiable, zero-knowledge anonymity without relying on centralized intermediaries.",
+    a: "ShadowNet is a privacy-focused Web3 access layer designed to reduce exposure when interacting with decentralized applications and the open web. It combines session isolation, browser fingerprint randomization, relay-based routing, and wallet tooling into a single environment.",
   },
   {
-    q: "How does ShadowNet protect my identity?",
-    a: "ShadowNet operates across three separate layers of protection. First, fingerprint randomization replaces every trackable browser signal — canvas hash, WebGL renderer, audio context, screen resolution, timezone, fonts, and user-agent — with cryptographically generated alternatives. Second, IP cloaking routes all traffic through audited relay nodes so your real IP address is never exposed to any destination server. Third, session isolation ensures that every stealth session runs in a sandboxed context; no cookies, cache, or local storage from previous sessions carry over.",
+    q: "How does ShadowNet improve privacy?",
+    a: "ShadowNet operates across multiple layers. It randomizes browser-identifiable properties (such as user-agent, screen configuration, and rendering signals), optionally routes traffic through relay infrastructure to mask IP addresses, and isolates sessions to prevent cross-session tracking. These techniques reduce tracking consistency but do not guarantee anonymity.",
   },
   {
     q: "How do I start a stealth session?",
-    a: "Navigate to the Stealth Sessions page. Enter the target URL you want to visit in the destination field, then select a relay node from the dropdown (or leave it as Direct Connection if you only need fingerprint spoofing). Click INITIATE STEALTH — ShadowNet will generate a fresh fingerprint profile, establish a session through the relay, and present you with a LAUNCH TARGET SITE button to open your destination in the new anonymous context.",
+    a: "Go to the Stealth Sessions page, enter a target URL, optionally select a relay node, and initiate the session. A new isolated browsing context will be created with a randomized fingerprint profile.",
   },
   {
     q: "Can I choose which relay node handles my traffic?",
-    a: "Yes. The Stealth Sessions page provides a full node selector listing every available relay in the ShadowNet network, including their country, city, current latency, and capacity. You can pick any online node before initiating a session. The Relay Network page gives you a detailed view with audit status, uptime history, and load metrics to help you choose the most suitable node for your needs.",
+    a: "Yes. Available relay nodes are listed with metadata such as location and latency. You can select a node before starting a session. Some nodes may be public or temporary during early-stage development.",
   },
   {
-    q: "Are the Solana wallets I generate safe to use?",
-    a: "ShadowNet generates Solana keypairs entirely on the server using a secure Ed25519 key derivation algorithm and BIP-39 mnemonic generation. The private key and mnemonic are transmitted to you over HTTPS and are never logged, stored, or cached anywhere on the ShadowNet infrastructure. Once the response reaches your browser, the keys exist only in your session memory. You should save your private key and mnemonic immediately and securely — if you close the page without saving them, they cannot be recovered.",
+    q: "Are the Solana wallets safe to use?",
+    a: "Wallets are generated during the request lifecycle and returned directly to the user. The system is designed to avoid persistence, but users should always treat generated keys as sensitive and store them securely.",
   },
   {
-    q: "Can I import my ShadowNet wallet into Phantom?",
-    a: "Yes. ShadowNet generates Solana wallets with Base58-encoded private keys in the exact format that Phantom's Import Private Key feature accepts. Open Phantom, go to Settings → Add / Connect Wallet → Import Private Key, and paste the private key displayed on the Wallet Generator page. Your wallet will be imported immediately with full access to send, receive, and interact with dApps.",
+    q: "Does ShadowNet store user data?",
+    a: "ShadowNet is designed to minimize data retention. Session data is handled in-memory where possible, and no long-term storage is intended. However, users should not assume absolute zero logging in all environments.",
   },
   {
-    q: "What is the ShadowNet relay network?",
-    a: "The ShadowNet relay network is a globally distributed set of routing nodes that mask your IP address by acting as an intermediary between your browser and any destination server. Each node in the network undergoes an independent audit to verify security compliance, a strict no-logging policy, and consistent uptime. Relay nodes are classified as Online, Maintenance, or Offline, and their current load and latency are reported in real time on the Relay Network page.",
-  },
-  {
-    q: "Does ShadowNet store any user data?",
-    a: "No. ShadowNet is built on a zero-retention architecture. Fingerprint profiles are generated on-demand and discarded after the API response. Stealth session records are ephemeral and held in memory only for the duration of the request cycle. Wallet keys are never persisted to any database. Relay node connections are stateless. There are no user accounts, no analytics trackers, and no third-party telemetry embedded anywhere in the platform.",
-  },
-  {
-    q: "What does 'audited relay node' mean?",
-    a: "An audited relay node is one that has been independently reviewed by a third-party security assessor. The audit covers the node operator's no-logging policy, the server's network isolation configuration, data retention practices, and jurisdictional legal exposure. Nodes that pass the audit receive the Audited badge visible on the Relay Network page. Unaudited nodes are still available but are flagged so you can make an informed choice.",
+    q: "What is the relay network?",
+    a: "The relay network is a routing layer that allows traffic to pass through intermediary servers before reaching a destination. This can help mask a user's IP address. Current implementations may include a mix of temporary and developing infrastructure.",
   },
   {
     q: "Is ShadowNet a VPN?",
-    a: "ShadowNet is not a traditional VPN. A VPN typically encrypts all traffic at the OS level and routes it through a single provider's infrastructure. ShadowNet operates at the application layer, specifically targeting Web3 and browser-based activity. It adds fingerprint randomization and session isolation on top of IP routing — capabilities that a standard VPN does not provide. Think of it as a privacy toolkit purpose-built for anonymous on-chain and dApp interaction.",
+    a: "No. ShadowNet operates at the application level rather than system-wide. It focuses on browser-based privacy techniques such as session isolation and fingerprint randomization rather than full-device traffic tunneling.",
   },
 ];
 
@@ -92,36 +84,34 @@ const sections: DocSection[] = [
       },
       {
         heading: "Three pillars",
-        body: "ShadowNet's architecture rests on three independent privacy mechanisms: (1) Stealth Sessions with randomized fingerprints and IP cloaking, (2) Anonymous Solana wallet generation with zero server-side retention, and (3) a curated network of audited, no-log relay nodes for traffic routing.",
+        body: "ShadowNet's architecture rests on three independent privacy mechanisms: (1) Stealth Sessions with randomized fingerprints and IP cloaking, (2) Anonymous Solana wallet generation with zero server-side retention, and (3) a curated network of relay nodes for traffic routing.",
       },
     ],
   },
-  {
-    id: "stealth-sessions",
-    title: "Stealth Sessions",
-    icon: Shield,
-    content: [
-      {
-        body: "A stealth session is an isolated browsing context initialized with a freshly generated, randomized identity profile. Every aspect of the browser fingerprint that websites use to track visitors is replaced with plausible but fabricated data before the session connects to any destination.",
-      },
-      {
-        heading: "Fingerprint randomization",
-        body: "When you generate a fingerprint profile, ShadowNet creates a randomized set of browser attributes: user-agent string, screen resolution, color depth, timezone, language locale, platform identifier, WebGL vendor and renderer strings, canvas hash, audio hash, and font list. Each profile is unique and statistically indistinguishable from a real browser running on different hardware.",
-      },
-      {
-        heading: "IP cloaking via relay nodes",
-        body: "Selecting a relay node before initiating a session routes your outbound traffic through that node. The destination server sees only the relay node's IP address — never your real one. Relay nodes are operated independently and are audited for no-logging compliance, meaning no record of the connection is retained at the routing layer.",
-      },
-      {
-        heading: "Session isolation",
-        body: "Each stealth session is fully sandboxed. Cookies, local storage, IndexedDB entries, and cache from any previous session are not accessible from within a new session. This prevents cross-session correlation even if the same relay node is reused.",
-      },
-      {
-        heading: "How to use",
-        body: "Go to Stealth Sessions → enter your target URL → select a relay node → click INITIATE STEALTH. Once the session is active, click LAUNCH TARGET SITE to open your destination through the protected context. The session remains active until you terminate it manually or it expires after one hour.",
-      },
-    ],
-  },
+
+{
+  id: "stealth-sessions",
+  title: "Stealth Sessions",
+  icon: Shield,
+  content: [
+    {
+      body: "A stealth session creates an isolated browsing context with a newly generated fingerprint profile. This reduces the ability for websites to correlate activity across sessions.",
+    },
+    {
+      heading: "Fingerprint randomization",
+      body: "ShadowNet randomizes browser-exposed attributes such as user-agent, screen resolution, timezone, and rendering signals. These values are designed to reduce tracking consistency rather than provide guaranteed anonymity.",
+    },
+    {
+      heading: "Session isolation",
+      body: "Each session is sandboxed, meaning cookies, storage, and cached data are not shared across sessions. This helps prevent cross-session tracking.",
+    },
+    {
+      heading: "Optional relay routing",
+      body: "Users can optionally route traffic through relay nodes to reduce direct IP exposure. This is an additional privacy layer but not a guarantee.",
+    },
+  ],
+}
+
   {
     id: "wallet-generator",
     title: "Wallet Generator",
@@ -154,15 +144,14 @@ const sections: DocSection[] = [
     icon: Network,
     content: [
       {
-        body: "The ShadowNet relay network is a geographically distributed set of independent routing nodes that anonymize your traffic by acting as an intermediary between your browser and any destination. All nodes in the network are independently audited and operate under strict no-logging policies.",
+        body: "The ShadowNet relay network is a geographically distributed set of independent routing nodes that anonymize your traffic by acting as an intermediary between your browser and any destination.
       },
       {
-        heading: "Node audit process",
-        body: "Each relay node undergoes a security audit covering: network isolation and firewall configuration, operating system hardening, absence of connection logging at the application and OS level, data retention policies, and jurisdictional risk assessment. Nodes that pass receive the Audited badge. Nodes pending review remain available but are labeled clearly.",
+       ,
       },
       {
         heading: "Choosing a node",
-        body: "The Relay Network page displays every available node with its location, current latency (in milliseconds), load percentage, uptime, audit status, and no-logs badge. For lowest latency, choose a node geographically close to you. For maximum jurisdictional distance from your target's hosting country, choose a node in a different legal jurisdiction.",
+        body: "The Relay Network page displays every available node with its location, current latency (in milliseconds), load percentage, uptime and no-logs badge. For lowest latency, choose a node geographically close to you. For maximum jurisdictional distance from your target's hosting country, choose a node in a different legal jurisdiction.",
       },
       {
         heading: "Node status",
