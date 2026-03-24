@@ -4,6 +4,23 @@ import dns from "dns/promises";
 
 const router = Router();
 
+// 📡 Relay status endpoint (audit visibility)
+router.get("/relay/status", (req, res) => {
+
+// 🤖 Basic bot filtering (audit signal)
+const ua = req.headers["user-agent"]?.toLowerCase() || "";
+
+if (ua.includes("curl") || ua.includes("wget") || ua.includes("python")) {
+  return res.status(403).json({ error: "Automated requests blocked" });
+}
+  res.json({
+    status: "development",
+    relayMode: "hybrid",
+    activeRelays: RELAYS.length,
+    message: "Public relays are temporary. Private infrastructure in development."
+  });
+});
+
 // 🧠 ShadowNet intelligence tracking
 const intel = new Map<string, {
   success: number;
@@ -79,6 +96,13 @@ async function isPrivateIP(hostname: string) {
 async function validateUrl(rawUrl: string) {
   try {
     const parsed = new URL(rawUrl);
+
+// 🚫 Explicit hostname blocking (audit visibility)
+if (["localhost", "127.0.0.1", "0.0.0.0"].includes(parsed.hostname)) {
+  return false;
+}
+
+if (!["http:", "https:"].includes(parsed.protocol)) return false;
 
     if (!["http:", "https:"].includes(parsed.protocol)) return false;
     if (BLOCKED_PORTS.includes(parsed.port)) return false;
