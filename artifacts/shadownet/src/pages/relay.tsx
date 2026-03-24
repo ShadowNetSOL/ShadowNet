@@ -34,7 +34,7 @@ export default function RelayPage() {
           RELAY NETWORK
         </h1>
         <p className="text-muted-foreground font-mono mt-2">
-          Global decentralized registry of audited, no-log OpenClaw routing nodes.
+         registry of OpenClaw routing nodes.
         </p>
       </div>
 
