@@ -113,3 +113,9 @@ It should not be relied upon for:
 	•	Strong anonymity guarantees
 	•	Protection against advanced adversaries
 	•	Secure handling of sensitive credentials
+## Security Clarifications
+
+- User-Agent filtering is used only for basic abuse detection and is not relied upon as a security boundary
+- IP masking is achieved through relay-based request routing, not client-side anonymization
+- Public relay nodes are temporary and should not be considered trusted infrastructure
+- Fingerprint randomization is best-effort and does not guarantee anonymity
