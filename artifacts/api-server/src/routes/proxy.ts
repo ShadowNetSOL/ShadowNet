@@ -5,18 +5,14 @@ import dns from "dns/promises";
 const router = Router();
 
 // 📡 Relay status endpoint (audit visibility)
+
 router.get("/relay/status", (req, res) => {
-
-// 🤖 Basic bot filtering (audit signal)
-const ua = req.headers["user-agent"]?.toLowerCase() || "";
-
-if (ua.includes("curl") || ua.includes("wget") || ua.includes("python")) {
-  return res.status(403).json({ error: "Automated requests blocked" });
-}
   res.json({
     status: "development",
     relayMode: "hybrid",
     activeRelays: RELAYS.length,
+    ipMasking: "enabled via relay routing",
+    logging: "no persistent logs",
     message: "Public relays are temporary. Private infrastructure in development."
   });
 });
@@ -29,6 +25,7 @@ const intel = new Map<string, {
 }>();
 // 🧠 Relay performance tracking
 const relayStats = new Map<string, { success: number; fails: number; lastUsed: number; avgLatency: number }>();
+const rateMap = new Map<string, { count: number; last: number }>();
 
 function updateRelayStats(relay: string, success: boolean, latency: number) {
   const entry = relayStats.get(relay) || { success: 0, fails: 0, lastUsed: 0, avgLatency: 0 };
@@ -101,11 +98,14 @@ async function validateUrl(rawUrl: string) {
 if (["localhost", "127.0.0.1", "0.0.0.0"].includes(parsed.hostname)) {
   return false;
 }
+if (parsed.hostname.endsWith(".onion")) return false;
+if (parsed.hostname.endsWith(".local")) return false;
+if (parsed.username || parsed.password) return false;
 
-if (!["http:", "https:"].includes(parsed.protocol)) return false;
-
-    if (!["http:", "https:"].includes(parsed.protocol)) return false;
-    if (BLOCKED_PORTS.includes(parsed.port)) return false;
+    if (parsed.protocol !== "https:" && parsed.hostname !== "localhost") {
+  return false;
+}
+    if (parsed.port && BLOCKED_PORTS.includes(parsed.port)) return false;
     if (await isPrivateIP(parsed.hostname)) return false;
 
     return true;
@@ -508,7 +508,46 @@ function rewriteHtml(html: string, finalUrl: string, proxyBase: string): string 
 // ── Main proxy handler ────────────────────────────────────────────────────────
 
 router.get("/proxy", async (req, res) => {
+const ip = req.ip;
+const now = Date.now();
+
+const entry = rateMap.get(ip) || { count: 0, last: now };
+
+// Reset every 60 seconds
+if (now - entry.last > 60000) {
+  entry.count = 0;
+  entry.last = now;
+}
+
+entry.count++;
+
+if (entry.count > 100) {
+  return res.status(429).json({ error: "Too many requests" });
+}
+
+rateMap.set(ip, entry);
+
+// 🤖 Basic abuse detection
+const ua = req.headers["user-agent"]?.toLowerCase() || "";
+
+const suspicious =
+  !ua ||
+  ua.length < 20 ||
+  /(curl|wget|python|bot|spider|crawler)/i.test(ua);
+
+if (suspicious) {
+  return res.status(403).json({
+    error: "Request blocked",
+    reason: "Suspicious client"
+  });
+}
+
   const rawUrl = req.query.url as string | undefined;
+
+// 📏 Input size limit (prevents abuse)
+if (rawUrl && rawUrl.length > 2048) {
+  return res.status(400).json({ error: "URL too long" });
+}
 
   if (!rawUrl) return res.status(400).send("Missing ?url= parameter");
 
@@ -529,7 +568,7 @@ router.get("/proxy", async (req, res) => {
   });
 
   try {
-    const ua = pickUA();
+    const spoofedUA = pickUA();
 
 let upstream;
 let lastError;
@@ -565,7 +604,7 @@ for (const relay of sortedRelays) {
       redirect: "follow",
       signal: AbortSignal.timeout(10000),
       headers: {
-        "User-Agent": ua,
+    "User-Agent": spoofedUA,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
       },
@@ -609,11 +648,12 @@ if (contentLength > 5_000_000) {
   return res.status(413).send("Response too large");
 }
     const finalUrl = upstream.url || targetUrl;
+
 const host = new URL(targetUrl).hostname;
-const entry = intel.get(host) || { success: 0, fails: 0, lastAccess: 0 };
-entry.success++;
-entry.lastAccess = Date.now();
-intel.set(host, entry);
+const intelEntry = intel.get(host) || { success: 0, fails: 0, lastAccess: 0 };
+intelEntry.success++;
+intelEntry.lastAccess = Date.now();
+intel.set(host, intelEntry);
 
     if (upstream.status === 403 || upstream.status === 429 || upstream.status === 530 || upstream.status === 1009) {
       return res.status(upstream.status).send(blockedPage(upstream.status, finalUrl));
@@ -628,12 +668,26 @@ intel.set(host, entry);
       }
     });
 
-    res.setHeader("X-Frame-Options", "ALLOWALL");
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "*");
-    res.setHeader("X-ShadowNet-Proxy", "active");
-    res.setHeader("Referrer-Policy", "no-referrer");
-    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+res.setHeader("Access-Control-Allow-Origin", "*");
+res.setHeader("Access-Control-Allow-Headers", "*");
+res.setHeader("X-ShadowNet-Proxy", "active");
+
+// 🔐 IP protection visibility
+res.setHeader("X-ShadowNet-IP-Protection", "relay-active");
+
+// 📊 Rate limiting visibility
+res.setHeader("X-RateLimit-Limit", "100");
+res.setHeader("X-RateLimit-Remaining", Math.max(0, 100 - entry.count).toString());
+
+// ⏱ Timeout enforcement
+res.setHeader("X-ShadowNet-Timeout", "10000ms");
+
+// 🧾 Logging policy
+res.setHeader("X-ShadowNet-Logging", "ephemeral");
+
+res.setHeader("Referrer-Policy", "no-referrer");
+res.setHeader("X-Content-Type-Options", "nosniff");
 
     const contentType = upstream.headers.get("content-type") ?? "";
    
@@ -663,10 +717,10 @@ intel.set(host, entry);
   } catch (err: unknown) {
     try {
   const host = rawUrl ? new URL(decodeURIComponent(rawUrl)).hostname : "unknown";
-  const entry = intel.get(host) || { success: 0, fails: 0, lastAccess: 0 };
-  entry.fails++;
-  entry.lastAccess = Date.now();
-  intel.set(host, entry);
+  const intelEntry = intel.get(host) || { success: 0, fails: 0, lastAccess: 0 };
+intelEntry.fails++;
+intelEntry.lastAccess = Date.now();
+intel.set(host, intelEntry);
 } catch {}
 const msg = err instanceof Error ? err.message : "Unknown error";
     const isTimeout = msg.includes("timeout") || msg.includes("TimeoutError");
