@@ -2,7 +2,7 @@
 ## ⚠️ Experimental Project Notice
 
 ShadowNet is an experimental privacy-focused platform currently under active development.
-
+> ⚠️ ShadowNet is currently in active development and should be considered experimental infrastructure.
 - Relay infrastructure is in progress and not yet independently audited
 - Public relay services are used temporarily as fallback nodes
 - Privacy features aim to reduce tracking, but do not guarantee anonymity
