@@ -26,6 +26,11 @@ const intel = new Map<string, {
 // 🧠 Relay performance tracking
 const relayStats = new Map<string, { success: number; fails: number; lastUsed: number; avgLatency: number }>();
 const rateMap = new Map<string, { count: number; last: number }>();
+const cache = new Map<string, {
+  data: Buffer;
+  contentType: string;
+  timestamp: number;
+}>();
 
 function updateRelayStats(relay: string, success: boolean, latency: number) {
   const entry = relayStats.get(relay) || { success: 0, fails: 0, lastUsed: 0, avgLatency: 0 };
@@ -508,6 +513,12 @@ function rewriteHtml(html: string, finalUrl: string, proxyBase: string): string 
 // ── Main proxy handler ────────────────────────────────────────────────────────
 
 router.get("/proxy", async (req, res) => {
+
+const API_KEY = "test123";
+
+if (req.headers["x-api-key"] !== API_KEY) {
+  return res.status(403).json({ error: "Unauthorized" });
+}
 const ip = req.ip;
 const now = Date.now();
 
@@ -536,6 +547,7 @@ const suspicious =
   /(curl|wget|python|bot|spider|crawler)/i.test(ua);
 
 if (suspicious) {
+  await new Promise(r => setTimeout(r, 2000));
   return res.status(403).json({
     error: "Request blocked",
     reason: "Suspicious client"
@@ -554,6 +566,14 @@ if (rawUrl && rawUrl.length > 2048) {
   let targetUrl: string;
   try {
     targetUrl = decodeURIComponent(rawUrl);
+const cacheKey = targetUrl;
+const cached = cache.get(cacheKey);
+
+if (cached && Date.now() - cached.timestamp < 30000) {
+  res.setHeader("X-ShadowNet-Cache", "HIT");
+  res.setHeader("Content-Type", cached.contentType);
+  return res.send(cached.data);
+}
     if (!(await validateUrl(targetUrl))) {
       return res.status(403).json({ error: "Blocked URL" });
     }
@@ -562,10 +582,12 @@ if (rawUrl && rawUrl.length > 2048) {
   }
 
   // Ephemeral logging
-  console.log("[ShadowNet] Proxy request", {
-    host: new URL(targetUrl).hostname,
-    timestamp: Date.now()
-  });
+  console.log("[ShadowNet]", {
+  host: new URL(targetUrl).hostname,
+  ip,
+  relayCount: RELAYS.length,
+  time: new Date().toISOString()
+});
 
   try {
     const spoofedUA = pickUA();
@@ -599,11 +621,14 @@ for (const relay of sortedRelays) {
       }
     }
 
-    const resFetch = await fetch(fetchUrl, {
-      method: "GET",
-      redirect: "follow",
-      signal: AbortSignal.timeout(10000),
-      headers: {
+    const controller = new AbortController();
+setTimeout(() => controller.abort(), 10000);
+
+const resFetch = await fetch(fetchUrl, {
+  method: "GET",
+  redirect: "follow",
+  signal: controller.signal,
+  headers: {
     "User-Agent": spoofedUA,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
@@ -694,10 +719,23 @@ res.setHeader("X-Content-Type-Options", "nosniff");
     if (contentType.includes("text/html")) {
       const text = await upstream.text();
       const rewritten = rewriteHtml(text, finalUrl, proxyBase);
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.setHeader("Content-Length", Buffer.byteLength(rewritten, "utf-8").toString());
-      return res.send(rewritten);
-    }
+const htmlBuffer = Buffer.from(rewritten, "utf-8");
+
+cache.set(cacheKey, {
+  data: buf,
+  contentType: contentType,
+  timestamp: Date.now()
+});
+
+if (cache.size > 100) {
+  const firstKey = cache.keys().next().value;
+  cache.delete(firstKey);
+}
+
+res.setHeader("X-ShadowNet-Cache", "MISS");
+
+return res.send(htmlBuffer);
+}
 
     if (contentType.includes("text/css")) {
       let css = await upstream.text();
@@ -710,9 +748,22 @@ res.setHeader("X-Content-Type-Options", "nosniff");
     }
 
     // Everything else (JS, JSON, images, fonts, binary) — stream as-is
-    const buf = await upstream.arrayBuffer();
-    if (contentType) res.setHeader("Content-Type", contentType);
-    return res.send(Buffer.from(buf));
+    const buf = Buffer.from(await upstream.arrayBuffer());
+
+cache.set(cacheKey, {
+  data: buf,
+  contentType: contentType,
+  timestamp: Date.now()
+});
+
+if (cache.size > 100) {
+  const firstKey = cache.keys().next().value;
+  cache.delete(firstKey);
+}
+
+res.setHeader("X-ShadowNet-Cache", "MISS");
+
+return res.send(buf);
 
   } catch (err: unknown) {
     try {
