@@ -51,7 +51,7 @@ const BLOCKED_PORTS = ["22", "25", "3306", "6379"];
 const ALLOWED = /^https?:\/\//i;
 // ── ShadowNet relay nodes ──
 const RELAYS = [
-  "/api/proxy", // your main server
+"SELF", // your main server
 
   // 🌐 Public test relays (temporary)
   "https://api.allorigins.win/raw?url=",
@@ -514,7 +514,7 @@ function rewriteHtml(html: string, finalUrl: string, proxyBase: string): string 
 
 router.get("/proxy", async (req, res) => {
 
-const API_KEY = "test123";
+const API_KEY = process.env.PROXY_KEY;
 
 if (req.headers["x-api-key"] !== API_KEY) {
   return res.status(403).json({ error: "Unauthorized" });
@@ -563,24 +563,28 @@ if (rawUrl && rawUrl.length > 2048) {
 
   if (!rawUrl) return res.status(400).send("Missing ?url= parameter");
 
-  let targetUrl: string;
+let targetUrl: string;
+let cacheKey: string;
   try {
-    targetUrl = decodeURIComponent(rawUrl);
-const cacheKey = targetUrl;
-const cached = cache.get(cacheKey);
+  targetUrl = decodeURIComponent(rawUrl);
 
-if (cached && Date.now() - cached.timestamp < 30000) {
-  res.setHeader("X-ShadowNet-Cache", "HIT");
-  res.setHeader("Content-Type", cached.contentType);
-  return res.send(cached.data);
-}
-    if (!(await validateUrl(targetUrl))) {
-      return res.status(403).json({ error: "Blocked URL" });
-    }
-  } catch {
+  if (!(await validateUrl(targetUrl))) {
     return res.status(403).json({ error: "Blocked URL" });
   }
 
+  cacheKey = targetUrl;
+
+  const cached = cache.get(cacheKey);
+
+  if (cached && Date.now() - cached.timestamp < 30000) {
+    res.setHeader("X-ShadowNet-Cache", "HIT");
+    res.setHeader("Content-Type", cached.contentType);
+    return res.send(cached.data);
+  }
+
+} catch {
+  return res.status(403).json({ error: "Blocked URL" });
+}
   // Ephemeral logging
   console.log("[ShadowNet]", {
   host: new URL(targetUrl).hostname,
@@ -613,7 +617,7 @@ for (const relay of sortedRelays) {
   try {
     let fetchUrl = targetUrl;
 
-    if (!relay.startsWith("/")) {
+    if (relay !== "SELF") {
       if (relay.includes("allorigins")) {
         fetchUrl = `${relay}${encodeURIComponent(targetUrl)}`;
       } else {
@@ -629,10 +633,13 @@ const resFetch = await fetch(fetchUrl, {
   redirect: "follow",
   signal: controller.signal,
   headers: {
-    "User-Agent": spoofedUA,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
+  "User-Agent": spoofedUA,
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+
+  // ✅ forward client cookies
+  "Cookie": req.headers.cookie || "",
+},
     });
 
     const duration = Date.now() - start;
@@ -661,7 +668,7 @@ if (!upstream) {
 // ✅ Build correct proxy base from chosen relay
 let proxyBase: string;
 
-if (chosenRelay.startsWith("/")) {
+if (chosenRelay === "SELF") {
   proxyBase = buildProxyBase(req); // your server
 } else {
   proxyBase = chosenRelay; // external relay
@@ -686,12 +693,22 @@ intel.set(host, intelEntry);
 
     res.status(upstream.status);
 
-    upstream.headers.forEach((value, key) => {
-      const k = key.toLowerCase();
-      if (!STRIP_RES.has(k) && k !== "transfer-encoding" && k !== "content-encoding") {
-        res.setHeader(key, value);
-      }
-    });
+   
+
+upstream.headers.forEach((value, key) => {
+  const k = key.toLowerCase();
+
+  // ✅ HANDLE COOKIES FIRST
+  if (k === "set-cookie") {
+    res.append("Set-Cookie", value);
+    return;
+  }
+
+  // ✅ NORMAL HEADERS
+  if (!STRIP_RES.has(k) && k !== "transfer-encoding" && k !== "content-encoding") {
+    res.setHeader(key, value);
+  }
+});
 
     res.setHeader("X-Frame-Options", "SAMEORIGIN");
 res.setHeader("Access-Control-Allow-Origin", "*");
@@ -722,11 +739,19 @@ res.setHeader("X-Content-Type-Options", "nosniff");
 const htmlBuffer = Buffer.from(rewritten, "utf-8");
 
 cache.set(cacheKey, {
-  data: buf,
-  contentType: contentType,
+  data: htmlBuffer,
+  contentType: "text/html",
   timestamp: Date.now()
 });
 
+// 🔥 CLEANUP OLD ENTRIES
+for (const [key, value] of cache) {
+  if (Date.now() - value.timestamp > 30000) {
+    cache.delete(key);
+  }
+}
+
+// size cap
 if (cache.size > 100) {
   const firstKey = cache.keys().next().value;
   cache.delete(firstKey);
@@ -752,10 +777,18 @@ return res.send(htmlBuffer);
 
 cache.set(cacheKey, {
   data: buf,
-  contentType: contentType,
+  contentType: contentType || "application/octet-stream",
   timestamp: Date.now()
 });
 
+// 🔥 CLEANUP OLD ENTRIES
+for (const [key, value] of cache) {
+  if (Date.now() - value.timestamp > 30000) {
+    cache.delete(key);
+  }
+}
+
+// size cap
 if (cache.size > 100) {
   const firstKey = cache.keys().next().value;
   cache.delete(firstKey);
