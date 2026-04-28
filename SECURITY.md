@@ -89,10 +89,24 @@ Note: Standard server logs (e.g. request metadata) may still exist depending on 
 ⸻
 
 🔐 Cryptographic & Key Management
-	•	ShadowNet does not require private key custody for core proxy functionality
-	•	Any blockchain-related features rely on standard libraries within the Solana ecosystem
 
-Users should always manage sensitive keys locally and avoid sharing private credentials with any service.
+  - **Wallet generation runs entirely in the user's browser.** The server has
+    no `/wallet/generate` endpoint and no code path that ever sees a
+    mnemonic, seed, or private key.
+  - The browser-side implementation uses audited primitives:
+    `@scure/bip39` (BIP-39 mnemonic + seed), `@noble/ed25519` (Ed25519
+    signing and verification), and SLIP-0010 hardened derivation on the
+    standard Solana path `m/44'/501'/0'/0'`.
+  - Keys live only in volatile browser memory and are never persisted by
+    ShadowNet, transmitted over the network, or written to logs.
+  - Phantom-compatibility is verified against `@solana/web3.js`'s
+    `Keypair.fromSecretKey` — the same secret bytes produce the same public
+    key, and the keypair signs and verifies correctly.
+  - The proxy and relay components do not require key custody at all.
+
+  Users remain responsible for managing their own keys: backing up the
+  mnemonic, treating the private key as a password-equivalent secret, and
+  never pasting it into untrusted surfaces.
 
 ⸻
 
