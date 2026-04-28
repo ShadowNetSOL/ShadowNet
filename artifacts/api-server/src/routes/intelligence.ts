@@ -23,8 +23,18 @@ const githubScanLimiter = rateLimit({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const RPC = "https://api.mainnet-beta.solana.com";
-const connection = new Connection(RPC, "confirmed");
+// Tiered RPC endpoints:
+//   1. SOLANA_RPC_URL env var (e.g. Helius/QuickNode) — preferred when set
+//   2. publicnode.com — free, reliable, supports getParsedTransactions
+//   3. mainnet-beta — fallback only; rate-limits parsed-tx calls aggressively
+const RPC_ENDPOINTS: string[] = [
+  process.env.SOLANA_RPC_URL,
+  "https://solana-rpc.publicnode.com",
+  "https://api.mainnet-beta.solana.com",
+].filter((u): u is string => Boolean(u));
+
+const connections = RPC_ENDPOINTS.map(url => new Connection(url, "confirmed"));
+const connection = connections[0];
 
 // Solana address regex: base58, 32–44 chars
 const SOL_ADDR_RE = /\b([1-9A-HJ-NP-Za-km-z]{32,44})\b/g;
@@ -309,21 +319,58 @@ interface ActivityEvent {
   valueUsd: number | null;
 }
 
-// Batch helper — getParsedTransactions can take many sigs at once but RPCs cap at ~25
-async function fetchParsedBatched(signatures: string[], chunkSize = 20) {
-  const out: Array<Awaited<ReturnType<typeof connection.getParsedTransactions>>[number]> = [];
-  for (let i = 0; i < signatures.length; i += chunkSize) {
-    const slice = signatures.slice(i, i + chunkSize);
+type ParsedTx = Awaited<ReturnType<typeof connection.getParsedTransaction>>;
+
+// Fetch a single parsed transaction with RPC failover.
+// Free RPCs aggressively rate-limit JSON-RPC batches, so we deliberately use
+// the singular `getParsedTransaction` and pace ourselves at the call site.
+async function fetchOneParsed(signature: string): Promise<ParsedTx> {
+  for (let attempt = 0; attempt < connections.length; attempt++) {
+    const conn = connections[attempt];
     try {
-      const txs = await connection.getParsedTransactions(slice, {
+      const tx = await conn.getParsedTransaction(signature, {
         maxSupportedTransactionVersion: 0,
         commitment: "confirmed",
       });
-      for (const tx of txs) out.push(tx);
-    } catch (e) {
-      // On rate-limit/error, push nulls so the index alignment is preserved
-      for (let j = 0; j < slice.length; j++) out.push(null);
+      if (tx) return tx;
+      // null → maybe rate-limited or pruned; let the next RPC try
+    } catch {
+      // try next endpoint
     }
+  }
+  return null;
+}
+
+// Throttled / parallel-bounded fetch — fills index-aligned results array.
+// Concurrency=3 keeps us under publicnode's ~40 req/10s cap while staying responsive.
+async function fetchParsedBatched(signatures: string[], _chunkSize = 0) {
+  void _chunkSize; // legacy arg kept for signature compatibility
+  const out: ParsedTx[] = new Array(signatures.length).fill(null);
+  let cursor = 0;
+  let failed = 0;
+
+  const CONCURRENCY = 3;
+  const MIN_INTERVAL_MS = 80; // ~12 req/s upper bound across the pool
+
+  let lastDispatch = 0;
+  const worker = async () => {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= signatures.length) return;
+      // Spread call dispatch across the pool to avoid bursting
+      const wait = Math.max(0, lastDispatch + MIN_INTERVAL_MS - Date.now());
+      if (wait > 0) await new Promise(r => setTimeout(r, wait));
+      lastDispatch = Date.now();
+
+      const tx = await fetchOneParsed(signatures[idx]);
+      if (tx) out[idx] = tx;
+      else failed++;
+    }
+  };
+
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  if (failed > 0) {
+    console.warn(`[fetchParsedBatched] ${failed}/${signatures.length} signatures could not be parsed (likely rate-limited)`);
   }
   return out;
 }
