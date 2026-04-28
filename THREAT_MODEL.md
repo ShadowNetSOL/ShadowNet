@@ -20,7 +20,7 @@
   | **WebRTC IP leaks** | WebRTC disabled inside stealth sessions |
   | **Geolocation API leaks** | Geolocation API blocked inside stealth sessions |
   | **Service-worker persistence** | Service-worker registration prevented inside stealth sessions |
-  | **Wallet identity correlation** | Anonymous Solana keypair generation per session |
+  | **Wallet identity correlation** | Anonymous Solana keypair generation per session, performed entirely in the browser — the server never sees the mnemonic or private key |
   | **SSRF via the proxy** | Protocol allowlist, port denylist, private/internal IP filtering, DNS validation |
   | **Relay abuse** | Rate limiting, request throttling, upstream timeouts |
   | **Doxxing via on-chain research** | Intel Hub queries are routed through the relay layer |
@@ -37,7 +37,7 @@
   | **Active fingerprinting** (mouse dynamics, behavioral biometrics, advanced timing attacks) | Best-effort fingerprint randomization cannot mask behavioral signals. |
   | **Account-level deanonymization** (logging in to your real Google account inside a stealth session) | If you authenticate as yourself, you are no longer anonymous. |
   | **Side-channel correlation across services** | If you reuse a wallet, a username, or a writing style, you can be linked. |
-  | **Lost or leaked private keys** | ShadowNet cannot recover keys and cannot detect compromised user devices. |
+  | **Lost or leaked private keys** | Wallet keys exist only in the user's browser. ShadowNet cannot recover keys and cannot detect compromised user devices, browser extensions, or clipboard hijackers. |
   | **Smart-contract risk on Solana** | The Intel Hub provides signal, not safety guarantees. |
 
   ---
