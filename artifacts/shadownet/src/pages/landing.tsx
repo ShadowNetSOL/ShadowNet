@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { motion, useInView } from "framer-motion";
-import { Shield, Key, Network, Radar, ChevronRight, Check, X } from "lucide-react";
+import { Shield, Key, Network, Radar, ChevronRight, Check, X, Github } from "lucide-react";
 
 const XLogo = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -200,6 +200,24 @@ export default function Landing() {
               LAUNCH APP <ChevronRight className="w-3 h-3" />
             </span>
           </Link>
+          <a
+            href="https://x.com/shadownetsol?s=21"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="ShadowNet on X"
+            className="text-white/50 hover:text-white transition-colors"
+          >
+            <XLogo className="w-4 h-4" />
+          </a>
+          <a
+            href="https://github.com/ShadowNetSOL/ShadowNet"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="ShadowNet on GitHub"
+            className="text-white/50 hover:text-white transition-colors"
+          >
+            <Github className="w-4 h-4" />
+          </a>
         </div>
       </nav>
 
@@ -552,8 +570,11 @@ export default function Landing() {
             <Link href="/docs"><span className="hover:text-white transition-colors cursor-pointer">Privacy</span></Link>
             <Link href="/docs"><span className="hover:text-white transition-colors cursor-pointer">Terms</span></Link>
             <Link href="/docs"><span className="hover:text-white transition-colors cursor-pointer">Security</span></Link>
-            <a href="https://x.com/shadownetsol?s=21" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
+            <a href="https://x.com/shadownetsol?s=21" target="_blank" rel="noopener noreferrer" aria-label="ShadowNet on X" className="hover:text-white transition-colors">
               <XLogo className="w-4 h-4" />
+            </a>
+            <a href="https://github.com/ShadowNetSOL/ShadowNet" target="_blank" rel="noopener noreferrer" aria-label="ShadowNet on GitHub" className="hover:text-white transition-colors">
+              <Github className="w-4 h-4" />
             </a>
           </div>
         </div>
