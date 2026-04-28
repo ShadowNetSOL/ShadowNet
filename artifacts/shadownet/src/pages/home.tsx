@@ -23,7 +23,6 @@ const features = [
   {
     id: "relay",
     title: "Relay Network",
-    description: "Route your traffic through OpenClaw's decentralized, independently audited no-log relayer nodes.",
     icon: Network,
     href: "/relay",
     color: "accent"

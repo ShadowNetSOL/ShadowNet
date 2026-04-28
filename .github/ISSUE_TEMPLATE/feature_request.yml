@@ -1,0 +1,30 @@
+name: Feature request
+  description: Suggest an idea or enhancement
+  title: "[feature]: "
+  labels: [enhancement, triage]
+  body:
+    - type: textarea
+      id: problem
+      attributes:
+        label: Problem
+        description: What user problem or use case does this solve?
+      validations:
+        required: true
+    - type: textarea
+      id: proposal
+      attributes:
+        label: Proposed solution
+      validations:
+        required: true
+    - type: textarea
+      id: alternatives
+      attributes:
+        label: Alternatives considered
+    - type: textarea
+      id: threat
+      attributes:
+        label: Threat-model implications
+        description: Does this change what ShadowNet protects against, weaken any guarantees, or add new trust assumptions?
+      validations:
+        required: true
+  
