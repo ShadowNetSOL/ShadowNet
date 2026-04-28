@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "ynQYXTmgqxRBIleLfXulJ"
+uri = "file://exports/shadownet-source.tar.gz"
+type = "unspecified"
+title = "ShadowNet Source (full project)"
