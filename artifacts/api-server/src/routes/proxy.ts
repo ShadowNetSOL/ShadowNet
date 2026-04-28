@@ -4,113 +4,37 @@ import dns from "dns/promises";
 
 const router = Router();
 
-// 📡 Relay status endpoint (audit visibility)
-
-router.get("/relay/status", (req, res) => {
-  res.json({
-    status: "development",
-    relayMode: "hybrid",
-    activeRelays: RELAYS.length,
-    ipMasking: "enabled via relay routing",
-    logging: "no persistent logs",
-    message: "Public relays are temporary. Private infrastructure in development."
-  });
-});
-
-// 🧠 ShadowNet intelligence tracking
-const intel = new Map<string, {
-  success: number;
-  fails: number;
-  lastAccess: number;
-}>();
-// 🧠 Relay performance tracking
-const relayStats = new Map<string, { success: number; fails: number; lastUsed: number; avgLatency: number }>();
-const rateMap = new Map<string, { count: number; last: number }>();
-const cache = new Map<string, {
-  data: Buffer;
-  contentType: string;
-  timestamp: number;
-}>();
-
-function updateRelayStats(relay: string, success: boolean, latency: number) {
-  const entry = relayStats.get(relay) || { success: 0, fails: 0, lastUsed: 0, avgLatency: 0 };
-  if (success) {
-    entry.success++;
-    // Simple running average for latency
-    entry.avgLatency = entry.avgLatency
-      ? (entry.avgLatency * (entry.success - 1) + latency) / entry.success
-      : latency;
-  } else {
-    entry.fails++;
-  }
-  entry.lastUsed = Date.now();
-  relayStats.set(relay, entry);
-}
-
 const BLOCKED_PORTS = ["22", "25", "3306", "6379"];
-const ALLOWED = /^https?:\/\//i;
-// ── ShadowNet relay nodes ──
-const RELAYS = [
-"SELF", // your main server
-
-  // 🌐 Public test relays (temporary)
-  "https://api.allorigins.win/raw?url=",
-  "https://thingproxy.freeboard.io/fetch/",
-  "https://corsproxy.io/?"
-];
-
-function pickRelaySmart(): string {
-  // Prefer relays with success history, low fails, and fastest avg latency
-  const sorted = [...RELAYS].sort((a, b) => {
-    const ra = relayStats.get(a) || { success: 0, fails: 0, avgLatency: Infinity };
-    const rb = relayStats.get(b) || { success: 0, fails: 0, avgLatency: Infinity };
-    
-    // Failures penalise heavily
-    const scoreA = ra.success - ra.fails - ra.avgLatency / 1000;
-    const scoreB = rb.success - rb.fails - rb.avgLatency / 1000;
-    return scoreB - scoreA;
-  });
-
-  // Pick top-ranked relay
-  return sorted[0] || RELAYS[0];
-}
 
 async function isPrivateIP(hostname: string) {
   try {
     const ips = await dns.lookup(hostname, { all: true });
-
-    function isPrivateIPRange(ip: string) {
-      return (
-        ip.startsWith("10.") ||
-        ip.startsWith("192.168.") ||
-        ip === "127.0.0.1" ||
-        /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)
-      );
-    }
-
-    return ips.some(ip => isPrivateIPRange(ip.address));
+    return ips.some(ip => {
+      const addr = ip.address;
+      // Check for private IP ranges (RFC 1918 + loopback)
+      if (addr === "127.0.0.1" || addr === "::1") return true; // loopback
+      if (addr.startsWith("10.")) return true; // 10.0.0.0/8
+      if (addr.startsWith("192.168.")) return true; // 192.168.0.0/16
+      if (addr.startsWith("172.")) {
+        // Only 172.16.0.0 to 172.31.255.255 is private
+        const parts = addr.split(".");
+        const second = parseInt(parts[1], 10);
+        if (second >= 16 && second <= 31) return true;
+      }
+      if (addr.startsWith("169.254.")) return true; // link-local
+      return false;
+    });
   } catch {
     return false;
   }
 }
-  
 
 async function validateUrl(rawUrl: string) {
   try {
     const parsed = new URL(rawUrl);
 
-// 🚫 Explicit hostname blocking (audit visibility)
-if (["localhost", "127.0.0.1", "0.0.0.0"].includes(parsed.hostname)) {
-  return false;
-}
-if (parsed.hostname.endsWith(".onion")) return false;
-if (parsed.hostname.endsWith(".local")) return false;
-if (parsed.username || parsed.password) return false;
-
-    if (parsed.protocol !== "https:" && parsed.hostname !== "localhost") {
-  return false;
-}
-    if (parsed.port && BLOCKED_PORTS.includes(parsed.port)) return false;
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
+    if (BLOCKED_PORTS.includes(parsed.port)) return false;
     if (await isPrivateIP(parsed.hostname)) return false;
 
     return true;
@@ -124,6 +48,7 @@ const STRIP_RES = new Set([
   "x-content-type-options", "strict-transport-security",
   "access-control-allow-origin",
 ]);
+
 
 const SPOOFED_UAS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -148,26 +73,9 @@ function buildProxyBase(req: import("express").Request): string {
 function proxyUrl(href: string, base: string, proxyBase: string): string {
   try {
     const abs = new URL(href, base).toString();
-    if (!ALLOWED.test(abs)) return href;
-
-    const relay = proxyBase;
-
-    // 🧠 Handle different relay formats
-    if (relay.includes("allorigins")) {
-      return `${relay}${encodeURIComponent(abs)}`;
-    }
-
-    if (relay.includes("thingproxy")) {
-      return `${relay}${abs}`;
-    }
-
-    if (relay.includes("corsproxy")) {
-      return `${relay}${abs}`;
-    }
-
-    // default (your own proxy)
-    return `${relay}?url=${encodeURIComponent(abs)}`;
-
+    // Rewrite all HTTPS URLs through the proxy
+    if (!abs.startsWith("https://") && !abs.startsWith("http://")) return href;
+    return `${proxyBase}?url=${encodeURIComponent(abs)}`;
   } catch {
     return href;
   }
@@ -513,254 +421,84 @@ function rewriteHtml(html: string, finalUrl: string, proxyBase: string): string 
 // ── Main proxy handler ────────────────────────────────────────────────────────
 
 router.get("/proxy", async (req, res) => {
-
-const API_KEY = process.env.PROXY_KEY;
-
-if (req.headers["x-api-key"] !== API_KEY) {
-  return res.status(403).json({ error: "Unauthorized" });
-}
-const ip = req.ip;
-const now = Date.now();
-
-const entry = rateMap.get(ip) || { count: 0, last: now };
-
-// Reset every 60 seconds
-if (now - entry.last > 60000) {
-  entry.count = 0;
-  entry.last = now;
-}
-
-entry.count++;
-
-if (entry.count > 100) {
-  return res.status(429).json({ error: "Too many requests" });
-}
-
-rateMap.set(ip, entry);
-
-// 🤖 Basic abuse detection
-const ua = req.headers["user-agent"]?.toLowerCase() || "";
-
-const suspicious =
-  !ua ||
-  ua.length < 20 ||
-  /(curl|wget|python|bot|spider|crawler)/i.test(ua);
-
-if (suspicious) {
-  await new Promise(r => setTimeout(r, 2000));
-  return res.status(403).json({
-    error: "Request blocked",
-    reason: "Suspicious client"
-  });
-}
-
   const rawUrl = req.query.url as string | undefined;
-
-// 📏 Input size limit (prevents abuse)
-if (rawUrl && rawUrl.length > 2048) {
-  return res.status(400).json({ error: "URL too long" });
-}
 
   if (!rawUrl) return res.status(400).send("Missing ?url= parameter");
 
-let targetUrl: string;
-let cacheKey: string;
+  let targetUrl: string;
   try {
-  targetUrl = decodeURIComponent(rawUrl);
-
-  if (!(await validateUrl(targetUrl))) {
+    targetUrl = decodeURIComponent(rawUrl);
+    if (!(await validateUrl(targetUrl))) {
+      return res.status(403).json({ error: "Blocked URL" });
+    }
+  } catch {
     return res.status(403).json({ error: "Blocked URL" });
   }
 
-  cacheKey = targetUrl;
-
-  const cached = cache.get(cacheKey);
-
-  if (cached && Date.now() - cached.timestamp < 30000) {
-    res.setHeader("X-ShadowNet-Cache", "HIT");
-    res.setHeader("Content-Type", cached.contentType);
-    return res.send(cached.data);
-  }
-
-} catch {
-  return res.status(403).json({ error: "Blocked URL" });
-}
   // Ephemeral logging
-  console.log("[ShadowNet]", {
-  host: new URL(targetUrl).hostname,
-  ip,
-  relayCount: RELAYS.length,
-  time: new Date().toISOString()
-});
+  console.log("[ShadowNet] Proxy request", {
+    host: new URL(targetUrl).hostname,
+    timestamp: Date.now()
+  });
 
   try {
-    const spoofedUA = pickUA();
-
-let upstream;
-let lastError;
-let chosenRelay = "";
-
-const sortedRelays = [...RELAYS].sort((a, b) => {
-  const ra = relayStats.get(a) || { success: 0, fails: 0, avgLatency: Infinity };
-  const rb = relayStats.get(b) || { success: 0, fails: 0, avgLatency: Infinity };
-
-  const scoreA = ra.success - ra.fails - ra.avgLatency / 1000;
-  const scoreB = rb.success - rb.fails - rb.avgLatency / 1000;
-
-  return scoreB - scoreA;
-});
-
-for (const relay of sortedRelays) {
-
-  const start = Date.now();
-
-  try {
-    let fetchUrl = targetUrl;
-
-    if (relay !== "SELF") {
-      if (relay.includes("allorigins")) {
-        fetchUrl = `${relay}${encodeURIComponent(targetUrl)}`;
-      } else {
-        fetchUrl = `${relay}${targetUrl}`;
-      }
-    }
-
-    const controller = new AbortController();
-setTimeout(() => controller.abort(), 10000);
-
-const resFetch = await fetch(fetchUrl, {
-  method: "GET",
-  redirect: "follow",
-  signal: controller.signal,
-  headers: {
-  "User-Agent": spoofedUA,
-  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-  "Accept-Language": "en-US,en;q=0.9",
-
-  // ✅ forward client cookies
-  "Cookie": req.headers.cookie || "",
-},
+    const ua = pickUA();
+    const upstream = await fetch(targetUrl, {
+      method: "GET",
+      redirect: "follow",
+      signal: AbortSignal.timeout(20000),
+      headers: {
+        "User-Agent": ua,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "identity",
+        "Cache-Control": "max-age=0",
+        "DNT": "1",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Sec-CH-UA": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+        "Sec-CH-UA-Mobile": "?0",
+        "Sec-CH-UA-Platform": '"Windows"',
+      },
     });
 
-    const duration = Date.now() - start;
-
-    if (resFetch && resFetch.ok) {
-      upstream = resFetch;
-      chosenRelay = relay;
-      updateRelayStats(relay, true, duration);
-      break;
-    } else {
-      updateRelayStats(relay, false, duration);
-    }
-
-  } catch (err) {
-    const duration = Date.now() - start;
-    updateRelayStats(relay, false, duration);
-    lastError = err;
-  }
-}
-
-// ❌ If ALL relays fail
-if (!upstream) {
-  throw lastError || new Error("All relays failed");
-}
-
-// ✅ Build correct proxy base from chosen relay
-let proxyBase: string;
-
-if (chosenRelay === "SELF") {
-  proxyBase = buildProxyBase(req); // your server
-} else {
-  proxyBase = chosenRelay; // external relay
-}
-
-// Check size AFTER fetch
-const contentLength = Number(upstream.headers.get("content-length") || 0);
-if (contentLength > 5_000_000) {
-  return res.status(413).send("Response too large");
-}
     const finalUrl = upstream.url || targetUrl;
-
-const host = new URL(targetUrl).hostname;
-const intelEntry = intel.get(host) || { success: 0, fails: 0, lastAccess: 0 };
-intelEntry.success++;
-intelEntry.lastAccess = Date.now();
-intel.set(host, intelEntry);
-
-    if (upstream.status === 403 || upstream.status === 429 || upstream.status === 530 || upstream.status === 1009) {
-      return res.status(upstream.status).send(blockedPage(upstream.status, finalUrl));
-    }
 
     res.status(upstream.status);
 
-   
+    upstream.headers.forEach((value, key) => {
+      const k = key.toLowerCase();
+      if (!STRIP_RES.has(k) && k !== "transfer-encoding" && k !== "content-encoding") {
+        res.setHeader(key, value);
+      }
+    });
 
-upstream.headers.forEach((value, key) => {
-  const k = key.toLowerCase();
-
-  // ✅ HANDLE COOKIES FIRST
-  if (k === "set-cookie") {
-    res.append("Set-Cookie", value);
-    return;
-  }
-
-  // ✅ NORMAL HEADERS
-  if (!STRIP_RES.has(k) && k !== "transfer-encoding" && k !== "content-encoding") {
-    res.setHeader(key, value);
-  }
-});
-
-    res.setHeader("X-Frame-Options", "SAMEORIGIN");
-res.setHeader("Access-Control-Allow-Origin", "*");
-res.setHeader("Access-Control-Allow-Headers", "*");
-res.setHeader("X-ShadowNet-Proxy", "active");
-
-// 🔐 IP protection visibility
-res.setHeader("X-ShadowNet-IP-Protection", "relay-active");
-
-// 📊 Rate limiting visibility
-res.setHeader("X-RateLimit-Limit", "100");
-res.setHeader("X-RateLimit-Remaining", Math.max(0, 100 - entry.count).toString());
-
-// ⏱ Timeout enforcement
-res.setHeader("X-ShadowNet-Timeout", "10000ms");
-
-// 🧾 Logging policy
-res.setHeader("X-ShadowNet-Logging", "ephemeral");
-
-res.setHeader("Referrer-Policy", "no-referrer");
-res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "ALLOWALL");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "*");
+    res.setHeader("X-ShadowNet-Proxy", "active");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader("X-Content-Type-Options", "nosniff");
 
     const contentType = upstream.headers.get("content-type") ?? "";
-   
+    const proxyBase = buildProxyBase(req);
+
+    if (contentType.includes("application/json")) {
+      const data = await upstream.text();
+      res.setHeader("Content-Type", "application/json");
+      return res.send(data);
+    }
+
     if (contentType.includes("text/html")) {
       const text = await upstream.text();
       const rewritten = rewriteHtml(text, finalUrl, proxyBase);
-const htmlBuffer = Buffer.from(rewritten, "utf-8");
-
-cache.set(cacheKey, {
-  data: htmlBuffer,
-  contentType: "text/html",
-  timestamp: Date.now()
-});
-
-// 🔥 CLEANUP OLD ENTRIES
-for (const [key, value] of cache) {
-  if (Date.now() - value.timestamp > 30000) {
-    cache.delete(key);
-  }
-}
-
-// size cap
-if (cache.size > 100) {
-  const firstKey = cache.keys().next().value;
-  cache.delete(firstKey);
-}
-
-res.setHeader("X-ShadowNet-Cache", "MISS");
-
-return res.send(htmlBuffer);
-}
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Content-Length", Buffer.byteLength(rewritten, "utf-8").toString());
+      return res.send(rewritten);
+    }
 
     if (contentType.includes("text/css")) {
       let css = await upstream.text();
@@ -773,40 +511,12 @@ return res.send(htmlBuffer);
     }
 
     // Everything else (JS, JSON, images, fonts, binary) — stream as-is
-    const buf = Buffer.from(await upstream.arrayBuffer());
-
-cache.set(cacheKey, {
-  data: buf,
-  contentType: contentType || "application/octet-stream",
-  timestamp: Date.now()
-});
-
-// 🔥 CLEANUP OLD ENTRIES
-for (const [key, value] of cache) {
-  if (Date.now() - value.timestamp > 30000) {
-    cache.delete(key);
-  }
-}
-
-// size cap
-if (cache.size > 100) {
-  const firstKey = cache.keys().next().value;
-  cache.delete(firstKey);
-}
-
-res.setHeader("X-ShadowNet-Cache", "MISS");
-
-return res.send(buf);
+    const buf = await upstream.arrayBuffer();
+    if (contentType) res.setHeader("Content-Type", contentType);
+    return res.send(Buffer.from(buf));
 
   } catch (err: unknown) {
-    try {
-  const host = rawUrl ? new URL(decodeURIComponent(rawUrl)).hostname : "unknown";
-  const intelEntry = intel.get(host) || { success: 0, fails: 0, lastAccess: 0 };
-intelEntry.fails++;
-intelEntry.lastAccess = Date.now();
-intel.set(host, intelEntry);
-} catch {}
-const msg = err instanceof Error ? err.message : "Unknown error";
+    const msg = err instanceof Error ? err.message : "Unknown error";
     const isTimeout = msg.includes("timeout") || msg.includes("TimeoutError");
     const code = isTimeout ? 504 : 502;
     const label = isTimeout ? "Gateway Timeout" : "Proxy Error";

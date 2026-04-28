@@ -8,7 +8,6 @@
 
 export * from "./errorResponse";
 export * from "./fingerprintProfile";
-export * from "./generatedWallet";
 export * from "./healthStatus";
 export * from "./relayConnection";
 export * from "./relayConnectionStatus";

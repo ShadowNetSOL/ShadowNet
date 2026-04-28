@@ -36,10 +36,10 @@ router.get("/pump-tokens", async (_req, res) => {
     );
 
     if (!profilesRes.ok) {
-      return res.status(502).json({ error: "Dexscreener unavailable", tokens: [] });
+      return void res.status(502).json({ error: "Dexscreener unavailable", tokens: [] });
     }
 
-    const profiles: TokenProfile[] = await profilesRes.json();
+    const profiles = (await profilesRes.json()) as TokenProfile[];
 
     const pumpProfiles = profiles
       .filter(
@@ -51,7 +51,7 @@ router.get("/pump-tokens", async (_req, res) => {
       .slice(0, 24);
 
     if (pumpProfiles.length === 0) {
-      return res.json({ tokens: [] });
+      return void res.json({ tokens: [] });
     }
 
     const addresses = pumpProfiles.map((p) => p.tokenAddress).join(",");
@@ -65,7 +65,7 @@ router.get("/pump-tokens", async (_req, res) => {
 
     let pairsMap: Record<string, DexPair> = {};
     if (pairsRes.ok) {
-      const pairsData: { pairs?: DexPair[] } = await pairsRes.json();
+      const pairsData = (await pairsRes.json()) as { pairs?: DexPair[] };
       for (const pair of pairsData.pairs ?? []) {
         const addr = pair.baseToken?.address;
         if (addr && !pairsMap[addr]) pairsMap[addr] = pair;

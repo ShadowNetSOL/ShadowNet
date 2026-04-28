@@ -1,0 +1,39 @@
+ShadowNetSOL/ShadowNet
+ShadowNet – Privacy-focused Solana dApp
+TypeScript
+18
+HIGH RISK
+Very low-trust early-stage Solana privacy project with risky wallet-handling claims, no license, minimal adoption, and limited maintenance history. Experimental status and privacy/anonymity marketing increase the need for strong independent review that is not evident here.
+STARS
+1
+FORKS
+0
+CONTRIBUTORS
+4
+OPEN ISSUES
+1
+CREATED
+1mo ago
+LAST PUSH
+1mo ago
+CODE OVERVIEW
+This repository appears to be a TypeScript-based Solana dApp that aims to provide privacy-oriented browsing/session relays, anonymous wallet generation, and related Web3 tooling. The documentation describes relay-based traffic handling, fingerprint randomization, and per-session wallet creation. In plain terms, it is trying to sit between users and Web3 apps while also generating crypto wallets.
+WHAT'S GOOD
+Includes SECURITY.md and architecture/status documentation, suggesting some project organization
+README explicitly states the project is experimental and not suitable for high-risk use
+Small dependency surface in package.json may reduce supply-chain exposure
+Not archived or disabled, so the project is at least still nominally maintained
+WHAT'S WEAK
+No license file despite README badge implying MIT, creating legal and trust concerns
+Very new repo with 1 star, 0 forks, and limited ecosystem validation
+33 days since last push for a 42-day-old repo suggests weak maintenance cadence
+Claims around privacy, IP cloaking, and anonymous wallets are high-risk and need audit evidence
+README discusses private key export/import flows, a common pattern in unsafe crypto projects
+Public fallback relay infrastructure is described as unaudited and still in progress
+SECURITY RISKS
+Wallet generation and key export features can expose users to theft if implementation is flawed or malicious
+Relay-based architecture may centralize sensitive traffic and metadata in operator-controlled infrastructure
+Privacy/anonymity claims may give users false confidence without independent audits or threat-model proof
+No license and minimal reputation make long-term support and accountability uncertain
+Experimental Solana tooling can mishandle mnemonics, keypairs, or signing flows, causing fund loss
+Temporary use of public relay endpoints introduces third-party trust and logging risks

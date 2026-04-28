@@ -19,7 +19,6 @@ import type {
 import type {
   ErrorResponse,
   FingerprintProfile,
-  GeneratedWallet,
   HealthStatus,
   RelayConnection,
   RelayNodeList,
@@ -111,88 +110,6 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-/**
- * Generates a new Ed25519 keypair for Solana, returning public key, private key (Base58), and mnemonic phrase. Keys are generated server-side and never stored.
- * @summary Generate anonymous Solana wallet
- */
-export const getGenerateWalletUrl = () => {
-  return `/api/wallet/generate`;
-};
-
-export const generateWallet = async (
-  options?: RequestInit,
-): Promise<GeneratedWallet> => {
-  return customFetch<GeneratedWallet>(getGenerateWalletUrl(), {
-    ...options,
-    method: "POST",
-  });
-};
-
-export const getGenerateWalletMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof generateWallet>>,
-    TError,
-    void,
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof generateWallet>>,
-  TError,
-  void,
-  TContext
-> => {
-  const mutationKey = ["generateWallet"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof generateWallet>>,
-    void
-  > = () => {
-    return generateWallet(requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type GenerateWalletMutationResult = NonNullable<
-  Awaited<ReturnType<typeof generateWallet>>
->;
-
-export type GenerateWalletMutationError = ErrorType<unknown>;
-
-/**
- * @summary Generate anonymous Solana wallet
- */
-export const useGenerateWallet = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof generateWallet>>,
-    TError,
-    void,
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof generateWallet>>,
-  TError,
-  void,
-  TContext
-> => {
-  return useMutation(getGenerateWalletMutationOptions(options));
-};
 
 /**
  * Returns list of audited relay nodes with their status, location, and performance metrics

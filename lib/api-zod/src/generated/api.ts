@@ -16,20 +16,6 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * Generates a new Ed25519 keypair for Solana, returning public key, private key (Base58), and mnemonic phrase. Keys are generated server-side and never stored.
- * @summary Generate anonymous Solana wallet
- */
-export const GenerateWalletResponse = zod.object({
-  publicKey: zod.string().describe("Solana public key (Base58)"),
-  privateKey: zod
-    .string()
-    .describe("Private key (Base58) - importable into Phantom"),
-  mnemonic: zod.string().describe("12-word mnemonic phrase"),
-  derivationPath: zod.string().describe("BIP44 derivation path used"),
-  createdAt: zod.string().describe("ISO timestamp of generation"),
-});
-
-/**
  * Returns list of audited relay nodes with their status, location, and performance metrics
  * @summary Get available relay nodes
  */

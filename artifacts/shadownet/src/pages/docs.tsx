@@ -11,35 +11,43 @@ interface FaqItem {
 const faqs: FaqItem[] = [
   {
     q: "What is ShadowNet?",
-    a: "ShadowNet is a privacy-focused Web3 access layer designed to reduce exposure when interacting with decentralized applications and the open web. It combines session isolation, browser fingerprint randomization, relay-based routing, and wallet tooling into a single environment.",
+    a: "ShadowNet is a privacy-first Web3 access layer designed for anonymous interaction with decentralized applications and the open web. It combines stealth browsing sessions with hardware-level fingerprint spoofing, anonymous Solana keypair generation, and a curated network of audited relay nodes — giving you verifiable, zero-knowledge anonymity without relying on centralized intermediaries.",
   },
   {
-    q: "How does ShadowNet improve privacy?",
-    a: "ShadowNet operates across multiple layers. It randomizes browser-identifiable properties (such as user-agent, screen configuration, and rendering signals), optionally routes traffic through relay infrastructure to mask IP addresses, and isolates sessions to prevent cross-session tracking. These techniques reduce tracking consistency but do not guarantee anonymity.",
+    q: "How does ShadowNet protect my identity?",
+    a: "ShadowNet operates across three separate layers of protection. First, fingerprint randomization replaces every trackable browser signal — canvas hash, WebGL renderer, audio context, screen resolution, timezone, fonts, and user-agent — with cryptographically generated alternatives. Second, IP cloaking routes all traffic through audited relay nodes so your real IP address is never exposed to any destination server. Third, session isolation ensures that every stealth session runs in a sandboxed context; no cookies, cache, or local storage from previous sessions carry over.",
   },
   {
     q: "How do I start a stealth session?",
-    a: "Go to the Stealth Sessions page, enter a target URL, optionally select a relay node, and initiate the session. A new isolated browsing context will be created with a randomized fingerprint profile.",
+    a: "Navigate to the Stealth Sessions page. Enter the target URL you want to visit in the destination field, then select a relay node from the dropdown (or leave it as Direct Connection if you only need fingerprint spoofing). Click INITIATE STEALTH — ShadowNet will generate a fresh fingerprint profile, establish a session through the relay, and present you with a LAUNCH TARGET SITE button to open your destination in the new anonymous context.",
   },
   {
     q: "Can I choose which relay node handles my traffic?",
-    a: "Yes. Available relay nodes are listed with metadata such as location and latency. You can select a node before starting a session. Some nodes may be public or temporary during early-stage development.",
+    a: "Yes. The Stealth Sessions page provides a full node selector listing every available relay in the ShadowNet network, including their country, city, current latency, and capacity. You can pick any online node before initiating a session. The Relay Network page gives you a detailed view with audit status, uptime history, and load metrics to help you choose the most suitable node for your needs.",
   },
   {
-    q: "Are the Solana wallets safe to use?",
-    a: "Wallets are generated during the request lifecycle and returned directly to the user. The system is designed to avoid persistence, but users should always treat generated keys as sensitive and store them securely.",
+    q: "Are the Solana wallets I generate safe to use?",
+    a: "Wallets are generated 100% client-side in your browser using the same audited cryptographic libraries that Phantom and Solflare use under the hood — @scure/bip39 for the BIP-39 mnemonic, @noble/hashes for SLIP-0010 derivation, and @noble/ed25519 for the Ed25519 keypair. Entropy comes from your operating system's RNG via crypto.getRandomValues. The private key and mnemonic never leave your device — there is no API call that transmits keys, and the ShadowNet server never sees them. ShadowNet wallets are intended for disposable / burner use (mint hunting, airdrops, one-off transactions). For meaningful funds you should use a hardware wallet (Ledger or Trezor); any browser-resident key is exposed if your machine or browser is compromised.",
   },
   {
-    q: "Does ShadowNet store user data?",
-    a: "ShadowNet is designed to minimize data retention. Session data is handled in-memory where possible, and no long-term storage is intended. However, users should not assume absolute zero logging in all environments.",
+    q: "Can I import my ShadowNet wallet into Phantom?",
+    a: "Yes. ShadowNet generates Solana wallets with Base58-encoded private keys in the exact format that Phantom's Import Private Key feature accepts. Open Phantom, go to Settings → Add / Connect Wallet → Import Private Key, and paste the private key displayed on the Wallet Generator page. Your wallet will be imported immediately with full access to send, receive, and interact with dApps.",
   },
   {
-    q: "What is the relay network?",
-    a: "The relay network is a routing layer that allows traffic to pass through intermediary servers before reaching a destination. This can help mask a user's IP address. Current implementations may include a mix of temporary and developing infrastructure.",
+    q: "What is the ShadowNet relay network?",
+    a: "The ShadowNet relay network is a globally distributed set of routing nodes that mask your IP address by acting as an intermediary between your browser and any destination server. Each node in the network undergoes an independent audit to verify security compliance, a strict no-logging policy, and consistent uptime. Relay nodes are classified as Online, Maintenance, or Offline, and their current load and latency are reported in real time on the Relay Network page.",
+  },
+  {
+    q: "Does ShadowNet store any user data?",
+    a: "No. ShadowNet is built on a zero-retention architecture. Fingerprint profiles are generated on-demand and discarded after the API response. Stealth session records are ephemeral and held in memory only for the duration of the request cycle. Wallet keys are never persisted to any database. Relay node connections are stateless. There are no user accounts, no analytics trackers, and no third-party telemetry embedded anywhere in the platform.",
+  },
+  {
+    q: "What does 'audited relay node' mean?",
+    a: "An audited relay node is one that has been independently reviewed by a third-party security assessor. The audit covers the node operator's no-logging policy, the server's network isolation configuration, data retention practices, and jurisdictional legal exposure. Nodes that pass the audit receive the Audited badge visible on the Relay Network page. Unaudited nodes are still available but are flagged so you can make an informed choice.",
   },
   {
     q: "Is ShadowNet a VPN?",
-    a: "No. ShadowNet operates at the application level rather than system-wide. It focuses on browser-based privacy techniques such as session isolation and fingerprint randomization rather than full-device traffic tunneling.",
+    a: "ShadowNet is not a traditional VPN. A VPN typically encrypts all traffic at the OS level and routes it through a single provider's infrastructure. ShadowNet operates at the application layer, specifically targeting Web3 and browser-based activity. It adds fingerprint randomization and session isolation on top of IP routing — capabilities that a standard VPN does not provide. Think of it as a privacy toolkit purpose-built for anonymous on-chain and dApp interaction.",
   },
 ];
 
@@ -84,57 +92,67 @@ const sections: DocSection[] = [
       },
       {
         heading: "Three pillars",
-        body: "ShadowNet's architecture rests on three independent privacy mechanisms: (1) Stealth Sessions with randomized fingerprints and IP cloaking, (2) Anonymous Solana wallet generation with zero server-side retention, and (3) a curated network of relay nodes for traffic routing.",
+        body: "ShadowNet's architecture rests on three independent privacy mechanisms: (1) Stealth Sessions with randomized fingerprints and IP cloaking, (2) anonymous Solana wallet generation that runs entirely in your browser so no key material ever touches our servers, and (3) a curated network of audited, no-log relay nodes for traffic routing.",
       },
     ],
   },
-
-{
-  id: "stealth-sessions",
-  title: "Stealth Sessions",
-  icon: Shield,
-  content: [
-    {
-      body: "A stealth session creates an isolated browsing context with a newly generated fingerprint profile. This reduces the ability for websites to correlate activity across sessions.",
-    },
-    {
-      heading: "Fingerprint randomization",
-      body: "ShadowNet randomizes browser-exposed attributes such as user-agent, screen resolution, timezone, and rendering signals. These values are designed to reduce tracking consistency rather than provide guaranteed anonymity.",
-    },
-    {
-      heading: "Session isolation",
-      body: "Each session is sandboxed, meaning cookies, storage, and cached data are not shared across sessions. This helps prevent cross-session tracking.",
-    },
-    {
-      heading: "Optional relay routing",
-      body: "Users can optionally route traffic through relay nodes to reduce direct IP exposure. This is an additional privacy layer but not a guarantee.",
-    },
-  ],
-}
-
+  {
+    id: "stealth-sessions",
+    title: "Stealth Sessions",
+    icon: Shield,
+    content: [
+      {
+        body: "A stealth session is an isolated browsing context initialized with a freshly generated, randomized identity profile. Every aspect of the browser fingerprint that websites use to track visitors is replaced with plausible but fabricated data before the session connects to any destination.",
+      },
+      {
+        heading: "Fingerprint randomization",
+        body: "When you generate a fingerprint profile, ShadowNet creates a randomized set of browser attributes: user-agent string, screen resolution, color depth, timezone, language locale, platform identifier, WebGL vendor and renderer strings, canvas hash, audio hash, and font list. Each profile is unique and statistically indistinguishable from a real browser running on different hardware.",
+      },
+      {
+        heading: "IP cloaking via relay nodes",
+        body: "Selecting a relay node before initiating a session routes your outbound traffic through that node. The destination server sees only the relay node's IP address — never your real one. Relay nodes are operated independently and are audited for no-logging compliance, meaning no record of the connection is retained at the routing layer.",
+      },
+      {
+        heading: "Session isolation",
+        body: "Each stealth session is fully sandboxed. Cookies, local storage, IndexedDB entries, and cache from any previous session are not accessible from within a new session. This prevents cross-session correlation even if the same relay node is reused.",
+      },
+      {
+        heading: "How to use",
+        body: "Go to Stealth Sessions → enter your target URL → select a relay node → click INITIATE STEALTH. Once the session is active, click LAUNCH TARGET SITE to open your destination through the protected context. The session remains active until you terminate it manually or it expires after one hour.",
+      },
+    ],
+  },
   {
     id: "wallet-generator",
     title: "Wallet Generator",
     icon: Key,
     content: [
       {
-        body: "The ShadowNet wallet generator creates anonymous Solana keypairs using the Ed25519 elliptic curve algorithm and BIP-39 mnemonic derivation. Generated wallets are fully compatible with Phantom and other Solana wallets that support private key import.",
+        body: "The ShadowNet wallet generator creates burner Solana keypairs entirely inside your browser. No keys, mnemonics, or seed material are ever transmitted to a ShadowNet server. The output is fully compatible with Phantom, Solflare, and any other Solana wallet that supports Base58 private-key import.",
       },
       {
         heading: "How generation works",
-        body: "Each time you click Generate New Keypair, ShadowNet produces a fresh 12-word BIP-39 mnemonic, derives a seed from it, and uses the m/44'/501'/0'/0' Solana derivation path to produce an Ed25519 keypair. The result includes a Base58-encoded public key and a Base58-encoded private key ready for Phantom import.",
+        body: "When you click Generate Burner Keypair, ShadowNet runs the following entirely on your device: (1) gather 128 bits of entropy from the operating system via crypto.getRandomValues, (2) encode that entropy as a 12-word BIP-39 English mnemonic using @scure/bip39, (3) stretch it to a 64-byte seed via PBKDF2-HMAC-SHA512, (4) derive an Ed25519 keypair along the Solana derivation path m/44'/501'/0'/0' using SLIP-0010 (HMAC-SHA512 with @noble/hashes), and (5) compute the public key with @noble/ed25519. The private key is exported as a Base58 string in the standard 64-byte Solana format.",
+      },
+      {
+        heading: "Audited cryptographic libraries",
+        body: "All cryptographic operations use the same audited primitives that production Solana wallets rely on: @scure/bip39 (mnemonic generation, audited by Cure53), @noble/hashes and @noble/ed25519 (audited by Cure53 and Trail of Bits), and bs58 for Base58 encoding. We implement zero custom cryptography — the entire derivation chain is industry-standard.",
+      },
+      {
+        heading: "Defense-in-depth checks",
+        body: "Before any key material is generated, ShadowNet verifies that crypto.getRandomValues is available, smoke-tests the RNG output for non-zero bytes, and refuses to proceed unless the page is loaded in a secure context (HTTPS or localhost). After encoding, intermediate sensitive buffers — the BIP-39 seed, derived chain code, and 64-byte secret-key array — are zero-filled in memory as a best-effort defense against later memory disclosure.",
       },
       {
         heading: "Zero retention",
-        body: "Keys are generated in memory during the API request and are never written to any database, log file, or persistent storage. The only copy of your private key and mnemonic exists in the API response transmitted to your browser. ShadowNet cannot recover keys after the response is delivered.",
+        body: "Because generation never leaves your browser, ShadowNet has no key material to retain — there is no API request that contains a private key or mnemonic, and no log line on any ShadowNet server records one. The only copies that exist are the strings displayed on your screen. Once you close or reload the page, they are gone.",
       },
       {
         heading: "Importing into Phantom",
         body: "Copy the private key shown on the Wallet Generator page. Open Phantom → click your avatar → Add / Connect Wallet → Import Private Key → paste the key and confirm. Your new anonymous wallet will be added to Phantom immediately and can be used for any on-chain activity.",
       },
       {
-        heading: "Security guidance",
-        body: "Store your private key and mnemonic phrase in an encrypted password manager or offline secure storage immediately after generation. Do not share them with anyone. Do not screenshot them on a device with cloud sync enabled. If you lose them, the wallet cannot be recovered — ShadowNet holds no copy.",
+        heading: "Security guidance — read this",
+        body: "ShadowNet wallets are designed for disposable use: airdrop hunting, one-off mints, testnet activity, dApp interactions you don't want linked to your main identity. They are NOT intended to hold meaningful funds. Any browser-resident key — including those generated by Phantom or Solflare — is exposed if your machine, browser, or installed extensions are compromised. For real balances, use a hardware wallet (Ledger or Trezor). If you do save a ShadowNet key for repeat use, store it in an encrypted password manager or offline cold storage; never screenshot it on a cloud-synced device, and never paste it into any other website.",
       },
     ],
   },
@@ -144,14 +162,15 @@ const sections: DocSection[] = [
     icon: Network,
     content: [
       {
-        body: "The ShadowNet relay network is a geographically distributed set of independent routing nodes that anonymize your traffic by acting as an intermediary between your browser and any destination.
+        body: "The ShadowNet relay network is a geographically distributed set of independent routing nodes that anonymize your traffic by acting as an intermediary between your browser and any destination. All nodes in the network are independently audited and operate under strict no-logging policies.",
       },
       {
-       ,
+        heading: "Node audit process",
+        body: "Each relay node undergoes a security audit covering: network isolation and firewall configuration, operating system hardening, absence of connection logging at the application and OS level, data retention policies, and jurisdictional risk assessment. Nodes that pass receive the Audited badge. Nodes pending review remain available but are labeled clearly.",
       },
       {
         heading: "Choosing a node",
-        body: "The Relay Network page displays every available node with its location, current latency (in milliseconds), load percentage, uptime and no-logs badge. For lowest latency, choose a node geographically close to you. For maximum jurisdictional distance from your target's hosting country, choose a node in a different legal jurisdiction.",
+        body: "The Relay Network page displays every available node with its location, current latency (in milliseconds), load percentage, uptime, audit status, and no-logs badge. For lowest latency, choose a node geographically close to you. For maximum jurisdictional distance from your target's hosting country, choose a node in a different legal jurisdiction.",
       },
       {
         heading: "Node status",

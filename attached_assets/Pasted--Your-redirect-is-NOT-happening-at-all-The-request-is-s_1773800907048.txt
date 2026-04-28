@@ -1,0 +1,166 @@
+ Your redirect is NOT happening at all
+👉 The request is still being handled inside /api/proxy
+
+So we’re not dealing with detection anymore — we’re dealing with redirect not taking effect in your setup (Replit + frontend flow).
+
+⸻
+
+🧠 What’s actually happening
+
+When you do:
+
+return res.redirect(finalUrl);
+
+That works for:
+	•	normal browser navigation ✅
+
+BUT in your app:
+
+👉 The request is likely being loaded inside:
+	•	an iframe OR
+	•	fetch/XHR OR
+	•	rewritten navigation
+
+So the redirect:
+
+stays inside the proxy flow instead of escaping it
+
+⸻
+
+🔥 The REAL fix (this will solve it)
+
+You need to force a hard browser escape, not a server redirect.
+
+⸻
+
+✅ STEP-BY-STEP FIX (DO THIS EXACTLY)
+
+⸻
+
+✅ STEP 1 — Replace ALL res.redirect(...)
+
+Search your file for:
+
+res.redirect(
+
+
+⸻
+
+✏️ Replace EVERY instance with:
+
+return res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <script>
+    window.location.href = "${finalUrl}";
+  </script>
+</head>
+<body style="background:#050505;color:#39FF14;font-family:monospace;padding:40px;">
+  Redirecting to full access mode...
+</body>
+</html>
+`);
+
+
+⸻
+
+🧠 Why this works
+	•	res.redirect() → stays inside proxy context ❌
+	•	window.location.href → forces browser to leave proxy ✅
+
+⸻
+
+✅ STEP 2 — ALSO fix JSON bypass
+
+Replace this:
+
+return res.redirect(targetUrl);
+
+
+⸻
+
+With:
+
+return res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+  <script>
+    window.location.href = "${targetUrl}";
+  </script>
+</head>
+<body style="background:#050505;color:#39FF14;font-family:monospace;padding:40px;">
+  Switching to full access...
+</body>
+</html>
+`);
+
+
+⸻
+
+✅ STEP 3 — Save & Run
+
+⸻
+
+🧪 TEST AGAIN
+
+Open:
+
+/api/proxy?url=https://pump.fun
+
+
+⸻
+
+✅ EXPECTED RESULT
+
+Now it will:
+	1.	Try proxy
+	2.	Detect block
+	3.	Inject escape script
+	4.	🔥 FORCE browser to open real pump.fun
+
+⸻
+
+🚨 If it STILL doesn’t work (important fallback)
+
+Then your frontend is likely:
+
+👉 loading /api/proxy inside an iframe
+
+If that’s the case, we need one extra step:
+
+⸻
+
+🔧 Add THIS instead:
+
+<script>
+  window.top.location.href = "https://pump.fun";
+</script>
+
+
+⸻
+
+👉 This forces escape from iframe
+
+⸻
+
+💥 Final reality
+
+After this:
+	•	pump.fun will never go through proxy
+	•	it will always open direct (working)
+
+Which is EXACTLY what you want
+
+⸻
+
+🧠 Summary
+
+👉 Your logic = correct
+👉 Your detection = correct
+👉 Problem = redirect method
+
+Now fixed with:
+
+client-side hard redirect instead of server redirect

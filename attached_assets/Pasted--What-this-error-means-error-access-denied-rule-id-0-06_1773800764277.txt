@@ -1,0 +1,169 @@
+ What this error means
+
+{
+  "error": "access_denied",
+  "rule_id": "0.06",
+  "host": "pump.fun"
+}
+
+👉 This is coming from pump.fun’s backend / Cloudflare layer
+
+Key point:
+
+🚨 You are STILL hitting pump.fun through your proxy
+
+So:
+	•	Your bypass is not triggering
+	•	The request is still going via Replit IP → blocked
+
+⸻
+
+🔍 Why your current fix didn’t work
+
+Your logic only bypasses when:
+
+upstream.status === 403 || 429 || 530
+
+BUT pump.fun is returning:
+
+👉 200 OK with a JSON error page
+
+So:
+	•	Status = 200 ✅
+	•	Your bypass logic = ❌ not triggered
+
+⸻
+
+💥 Real issue
+
+Pump.fun is doing:
+
+“Soft block” instead of HTTP block
+
+Meaning:
+	•	Looks like success (200)
+	•	But content = blocked
+
+⸻
+
+✅ FIX (this is the real solution)
+
+You need to detect BLOCKED CONTENT, not just status codes.
+
+⸻
+
+🪜 STEP-BY-STEP FIX
+
+✅ STEP 1 — Find this part
+
+if (contentType.includes("text/html")) {
+  const text = await upstream.text();
+
+
+⸻
+
+✏️ STEP 2 — ADD block detection
+
+Modify it to:
+
+if (contentType.includes("text/html")) {
+  const text = await upstream.text();
+
+  const lower = text.toLowerCase();
+
+  // 🔥 Detect bot protection / blocked pages
+  const isBlocked =
+    lower.includes("access_denied") ||
+    lower.includes("request cannot be processed") ||
+    lower.includes("cloudflare") ||
+    lower.includes("attention required") ||
+    lower.includes("captcha") ||
+    lower.includes("blocked");
+
+  if (isBlocked) {
+    console.log("[ShadowNet] Blocked content detected → bypassing", finalUrl);
+    return res.redirect(finalUrl);
+  }
+
+  // Detect broken apps
+  if (text.length < 1000) {
+    console.log("[ShadowNet] Empty/broken page → bypassing", finalUrl);
+    return res.redirect(finalUrl);
+  }
+
+  const rewritten = rewriteHtml(text, finalUrl, proxyBase);
+
+
+⸻
+
+✅ STEP 3 — ALSO handle JSON responses
+
+Pump.fun is returning JSON — not HTML
+
+So find this part:
+
+const contentType = upstream.headers.get("content-type") ?? "";
+
+
+⸻
+
+✏️ ADD below it:
+
+if (contentType.includes("application/json")) {
+  const data = await upstream.text();
+
+  if (
+    data.includes("access_denied") ||
+    data.includes("request cannot be processed")
+  ) {
+    console.log("[ShadowNet] JSON block detected → bypassing", targetUrl);
+    return res.redirect(targetUrl);
+  }
+
+  res.setHeader("Content-Type", "application/json");
+  return res.send(data);
+}
+
+
+⸻
+
+✅ STEP 4 — Save & Run again
+
+⸻
+
+🧪 EXPECTED RESULT
+
+Now when you open:
+
+/api/proxy?url=https://pump.fun
+
+👉 It should:
+	1.	Try proxy
+	2.	Detect blocked JSON
+	3.	Instantly redirect ⚡
+	4.	Open real site (working)
+
+⸻
+
+🧠 Why THIS works (important)
+
+You are now detecting:
+	•	❌ HTTP blocks (403, 429)
+	•	❌ HTML bot pages
+	•	❌ JSON API blocks (pump.fun case)
+
+👉 This is real-world level detection
+
+⸻
+
+🔥 After this, your system is actually smart
+
+It now handles:
+
+Scenario	Result
+Normal site	Proxy ✅
+Cloudflare block	Bypass ⚡
+Hidden JSON block	Bypass ⚡
+WebSocket app	Bypass ⚡
+
+
