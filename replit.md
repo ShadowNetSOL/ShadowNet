@@ -91,6 +91,30 @@ Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used b
 
 Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
 
+### `artifacts/shadownet` (`@workspace/shadownet`)
+
+ShadowNet — privacy-native Solana Web3 toolkit. Dark theme (#050505), neon green primary (#39FF14), purple secondary (#8B5CF6), monospace.
+
+Key pages (in `src/pages/app/`):
+- `dash` — main dashboard
+- `stealth` — Stealth Sessions (Tor-like relay routing)
+- `wallet` — privacy-first non-custodial wallet (keys stored client-side only via `lib/wallet.ts`)
+- `relay` — relay node listings
+- `intel` — Intelligence Hub with 4 sub-tools:
+  - **WALLET** — Wallet Analyzer with two tabs:
+    - **ANALYZE**: AI-written brief, Score, Portfolio, Holdings, **Dev Tokens** (coins launched by this wallet, derived from `initializeMint`/`initializeMint2` instructions in the wallet's recent txs), and a **TRACK WALLET** button
+    - **TRACKED**: list of tracked wallets (stored ONLY in `localStorage` under `shadownet:tracked-wallets`, never sent to the server) with per-wallet activity feed; polls every 45s, fires browser Notifications on new buy/sell events using monotonic request IDs to avoid stale/duplicate notifications
+  - **CA** — X (Twitter) Contract Address checker
+  - **FOLLOW** — Smart follower detection
+  - **GITHUB** — Repo trust scanner
+
+Backend endpoints (in `artifacts/api-server/src/routes/intelligence.ts`):
+- `POST /api/intelligence/wallet` — RPC fan-out (balance, tokens, recent sigs) with `aiSummary` (OpenAI gpt-5.4 with 8s timeout + heuristic fallback)
+- `POST /api/intelligence/wallet/onchain` — batches `getParsedTransactions` (chunks of 20, up to 200 sigs); detects dev tokens via `initializeMint*` where `mintAuthority===wallet`; classifies activity as BUY/SELL/RECEIVE/SEND using SOL+stables ("value-like") vs. other token deltas; skips failed txs (`meta.err != null`)
+- `POST /api/intelligence/x-ca`, `POST /api/intelligence/smart-followers`, `POST /api/intelligence/github` — other intel sub-tools
+
+No DB persistence for tracked wallets — privacy-first by design.
+
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.

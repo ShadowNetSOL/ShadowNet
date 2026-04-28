@@ -98,6 +98,93 @@ async function fetchNitter(path: string): Promise<string | null> {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
+// ── AI summary helper for wallets ────────────────────────────────────────────
+
+interface WalletStats {
+  address: string;
+  solBalance: number;
+  totalUsd: number;
+  txCount: number;
+  tokenCount: number;
+  topTokens: Array<{ symbol: string; valueUsd: number }>;
+  firstActivity: string | null;
+  lastActivity: string | null;
+  score: number;
+}
+
+function heuristicWalletSummary(s: WalletStats): string {
+  const parts: string[] = [];
+  const ageDays = s.firstActivity
+    ? Math.floor((Date.now() - new Date(s.firstActivity).getTime()) / 86_400_000)
+    : 0;
+  const inactiveDays = s.lastActivity
+    ? Math.floor((Date.now() - new Date(s.lastActivity).getTime()) / 86_400_000)
+    : null;
+
+  // Activity profile
+  if (s.txCount === 0) parts.push("Dormant address with no on-chain history detected.");
+  else if (s.txCount >= 100) parts.push(`Highly active wallet (100+ recent transactions${ageDays > 30 ? `, first seen ~${ageDays}d ago` : ""}).`);
+  else if (s.txCount >= 30) parts.push(`Moderately active wallet (${s.txCount} recent transactions${ageDays > 30 ? `, first seen ~${ageDays}d ago` : ""}).`);
+  else parts.push(`Low-activity wallet (${s.txCount} recent transactions${ageDays > 0 ? `, first seen ~${ageDays}d ago` : ""}).`);
+
+  // Holdings profile
+  if (s.totalUsd >= 10_000) parts.push(`Sizeable portfolio (~$${s.totalUsd.toFixed(0)}) across ${s.tokenCount} tokens${s.topTokens[0] ? `, top: ${s.topTokens[0].symbol}` : ""}.`);
+  else if (s.totalUsd >= 100) parts.push(`Modest portfolio (~$${s.totalUsd.toFixed(0)}) holding ${s.tokenCount} token${s.tokenCount === 1 ? "" : "s"}.`);
+  else if (s.tokenCount > 0) parts.push(`Holds ${s.tokenCount} token${s.tokenCount === 1 ? "" : "s"} but minimal USD value.`);
+  else parts.push(`No SPL token holdings; ${s.solBalance.toFixed(3)} SOL on hand.`);
+
+  if (inactiveDays !== null && inactiveDays > 60) parts.push(`Quiet for ~${inactiveDays}d.`);
+
+  return parts.join(" ");
+}
+
+async function aiWalletSummary(s: WalletStats): Promise<string> {
+  if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY || !process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
+    return heuristicWalletSummary(s);
+  }
+  const facts = [
+    `Address: ${s.address}`,
+    `SOL balance: ${s.solBalance.toFixed(4)}`,
+    `Total portfolio USD: $${s.totalUsd.toFixed(2)}`,
+    `Tx count (last 100): ${s.txCount}`,
+    `Token holdings: ${s.tokenCount}`,
+    `Top tokens by value: ${s.topTokens.slice(0, 5).map(t => `${t.symbol} ($${t.valueUsd.toFixed(0)})`).join(", ") || "(none)"}`,
+    `First seen: ${s.firstActivity ?? "(unknown)"}`,
+    `Last seen: ${s.lastActivity ?? "(unknown)"}`,
+    `Score: ${s.score}/100`,
+  ].join("\n");
+
+  const prompt = `You are an on-chain analyst. Given the Solana wallet stats below, write a SHORT plain-English description (2 to 3 sentences max, ~250 chars total) summarizing what kind of wallet this is and notable patterns. Avoid speculation. Be factual and concise.
+
+WALLET STATS:
+${facts}
+
+Examples of good summaries:
+- "Active trading wallet with $4.2K portfolio dominated by BONK. Made 100+ transactions and remains active in the last week."
+- "Mostly dormant wallet with minimal SOL and no token holdings. Last activity ~120 days ago."
+
+Return ONLY the summary text, no JSON, no quotes, no markdown.`;
+
+  try {
+    const completion = await Promise.race([
+      openai.chat.completions.create({
+        model: "gpt-5.4",
+        max_completion_tokens: 200,
+        messages: [
+          { role: "system", content: "You write concise factual summaries of on-chain wallet activity. Output plain text only." },
+          { role: "user", content: prompt },
+        ],
+      }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("AI timeout")), 8000)),
+    ]);
+    const text = (completion.choices[0]?.message?.content ?? "").trim();
+    if (text.length < 10) return heuristicWalletSummary(s);
+    return clipStr(text, 400);
+  } catch {
+    return heuristicWalletSummary(s);
+  }
+}
+
 // POST /api/intelligence/wallet
 router.post("/intelligence/wallet", async (req, res) => {
   const { address } = req.body as { address?: string };
@@ -109,16 +196,17 @@ router.post("/intelligence/wallet", async (req, res) => {
   }
 
   try {
-    const solPrice = await getSolPrice();
+    // Fetch all the cheap RPC data in parallel
+    const [solPrice, lamports, tokenAccounts, sigs] = await Promise.all([
+      getSolPrice(),
+      connection.getBalance(pubkey),
+      connection.getParsedTokenAccountsByOwner(pubkey, {
+        programId: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+      }),
+      connection.getSignaturesForAddress(pubkey, { limit: 100 }),
+    ]);
 
-    // SOL balance
-    const lamports = await connection.getBalance(pubkey);
     const solBalance = lamports / LAMPORTS_PER_SOL;
-
-    // Token accounts
-    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(pubkey, {
-      programId: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
-    });
 
     const tokens = tokenAccounts.value
       .map(a => ({
@@ -128,9 +216,7 @@ router.post("/intelligence/wallet", async (req, res) => {
       }))
       .filter(t => t.amount > 0);
 
-    // Get metadata + prices for tokens
-    const mints = tokens.map(t => t.mint);
-    const meta = await getTokenMetadata(mints);
+    const meta = await getTokenMetadata(tokens.map(t => t.mint));
 
     const enrichedTokens = tokens.map(t => ({
       mint: t.mint,
@@ -141,8 +227,6 @@ router.post("/intelligence/wallet", async (req, res) => {
       valueUsd: t.amount * (meta[t.mint]?.priceUsd ?? 0),
     })).sort((a, b) => b.valueUsd - a.valueUsd);
 
-    // Transaction signatures (recent 100)
-    const sigs = await connection.getSignaturesForAddress(pubkey, { limit: 100 });
     const txCount = sigs.length;
     const firstTx = sigs.length ? sigs[sigs.length - 1] : null;
     const lastTx = sigs.length ? sigs[0] : null;
@@ -161,6 +245,20 @@ router.post("/intelligence/wallet", async (req, res) => {
     if (totalUsd > 100) score += 10;
     score = Math.min(score, 100);
 
+    const stats: WalletStats = {
+      address: pubkey.toBase58(),
+      solBalance,
+      totalUsd,
+      txCount,
+      tokenCount: tokens.length,
+      topTokens: enrichedTokens.slice(0, 5).map(t => ({ symbol: t.symbol, valueUsd: t.valueUsd })),
+      firstActivity: firstTx?.blockTime ? new Date(firstTx.blockTime * 1000).toISOString() : null,
+      lastActivity: lastTx?.blockTime ? new Date(lastTx.blockTime * 1000).toISOString() : null,
+      score,
+    };
+
+    const aiSummary = await aiWalletSummary(stats);
+
     res.json({
       address: pubkey.toBase58(),
       solBalance,
@@ -170,13 +268,254 @@ router.post("/intelligence/wallet", async (req, res) => {
       tokens: enrichedTokens.slice(0, 20),
       txCount,
       totalUsd,
-      firstActivity: firstTx?.blockTime ? new Date(firstTx.blockTime * 1000).toISOString() : null,
-      lastActivity: lastTx?.blockTime ? new Date(lastTx.blockTime * 1000).toISOString() : null,
+      firstActivity: stats.firstActivity,
+      lastActivity: stats.lastActivity,
       score,
+      aiSummary,
     });
   } catch (err) {
     console.error("wallet intel error", err);
     res.status(500).json({ error: "Failed to fetch wallet data. RPC may be rate-limiting." });
+  }
+});
+
+// ── On-chain details: dev tokens (coins launched) + recent buy/sell activity ──
+
+const SOL_MINT = "So11111111111111111111111111111111111111112";
+const STABLE_MINTS = new Set([
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC
+  "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", // USDT
+]);
+
+interface DevToken {
+  mint: string;
+  symbol: string;
+  name: string;
+  priceUsd: number;
+  marketCapUsd: number | null;
+  createdAt: string | null;
+  signature: string;
+}
+
+interface ActivityEvent {
+  signature: string;
+  timestamp: string;
+  slot: number;
+  type: "BUY" | "SELL" | "RECEIVE" | "SEND" | "OTHER";
+  tokenMint: string | null;
+  tokenSymbol: string | null;
+  tokenAmount: number | null;
+  solDelta: number; // signed change in SOL for the wallet (incl. fee)
+  valueUsd: number | null;
+}
+
+// Batch helper — getParsedTransactions can take many sigs at once but RPCs cap at ~25
+async function fetchParsedBatched(signatures: string[], chunkSize = 20) {
+  const out: Array<Awaited<ReturnType<typeof connection.getParsedTransactions>>[number]> = [];
+  for (let i = 0; i < signatures.length; i += chunkSize) {
+    const slice = signatures.slice(i, i + chunkSize);
+    try {
+      const txs = await connection.getParsedTransactions(slice, {
+        maxSupportedTransactionVersion: 0,
+        commitment: "confirmed",
+      });
+      for (const tx of txs) out.push(tx);
+    } catch (e) {
+      // On rate-limit/error, push nulls so the index alignment is preserved
+      for (let j = 0; j < slice.length; j++) out.push(null);
+    }
+  }
+  return out;
+}
+
+// POST /api/intelligence/wallet/onchain
+//   Body: { address: string, limit?: number }
+//   Returns { devTokens, activity, scannedTxCount }
+router.post("/intelligence/wallet/onchain", async (req, res) => {
+  const { address, limit } = req.body as { address?: string; limit?: number };
+  if (!address?.trim()) return res.status(400).json({ error: "Address required" });
+
+  let pubkey: PublicKey;
+  try { pubkey = new PublicKey(address.trim()); } catch {
+    return res.status(400).json({ error: "Invalid Solana address" });
+  }
+  const walletStr = pubkey.toBase58();
+
+  // Allow a bigger scan window (up to 200 sigs) for dev token discovery, default 80 for speed
+  const scanLimit = Math.max(20, Math.min(200, Math.floor(limit ?? 80)));
+
+  // Allow up to 60s — parsed tx batching is the slow path
+  res.setTimeout(60_000, () => {
+    if (!res.headersSent) res.status(504).json({ error: "On-chain scan timed out. Try again shortly." });
+  });
+
+  try {
+    const sigs = await connection.getSignaturesForAddress(pubkey, { limit: scanLimit });
+    if (sigs.length === 0) {
+      return res.json({ devTokens: [], activity: [], scannedTxCount: 0 });
+    }
+
+    const parsed = await fetchParsedBatched(sigs.map(s => s.signature));
+
+    const devTokenMints = new Set<string>();
+    const devTokenInfo = new Map<string, { signature: string; createdAt: string | null }>();
+    const activity: ActivityEvent[] = [];
+
+    for (let i = 0; i < parsed.length; i++) {
+      const tx = parsed[i];
+      if (!tx || !tx.meta) continue;
+      // Skip failed transactions — they didn't actually happen
+      if (tx.meta.err != null) continue;
+
+      const sig = sigs[i];
+      const ts = sig.blockTime ? new Date(sig.blockTime * 1000).toISOString() : new Date().toISOString();
+
+      // ── Detect token creation (initializeMint where mintAuthority is wallet) ──
+      const allInstructions = [
+        ...tx.transaction.message.instructions,
+        ...(tx.meta.innerInstructions ?? []).flatMap(g => g.instructions),
+      ];
+      for (const ix of allInstructions) {
+        if ("parsed" in ix && ix.parsed && typeof ix.parsed === "object") {
+          const parsedIx = ix.parsed as { type?: string; info?: { mint?: string; mintAuthority?: string } };
+          const ixType = parsedIx.type;
+          if (
+            (ixType === "initializeMint" || ixType === "initializeMint2") &&
+            parsedIx.info?.mintAuthority === walletStr &&
+            parsedIx.info.mint
+          ) {
+            const mint = parsedIx.info.mint;
+            if (!devTokenMints.has(mint)) {
+              devTokenMints.add(mint);
+              devTokenInfo.set(mint, { signature: sig.signature, createdAt: ts });
+            }
+          }
+        }
+      }
+
+      // ── Detect buy/sell activity via SOL + token balance deltas for the wallet ──
+      const accountKeys = tx.transaction.message.accountKeys.map(k =>
+        typeof k === "string" ? k : k.pubkey.toBase58(),
+      );
+      const walletIdx = accountKeys.indexOf(walletStr);
+      const solDelta = walletIdx >= 0
+        ? ((tx.meta.postBalances[walletIdx] ?? 0) - (tx.meta.preBalances[walletIdx] ?? 0)) / LAMPORTS_PER_SOL
+        : 0;
+
+      // Aggregate token deltas owned by wallet (mint -> uiAmount delta), keep ALL mints (incl. SOL/stables)
+      const tokenDeltas = new Map<string, number>();
+      const pre = tx.meta.preTokenBalances ?? [];
+      const post = tx.meta.postTokenBalances ?? [];
+      const keyOf = (b: { accountIndex: number; mint: string }) => `${b.accountIndex}:${b.mint}`;
+      const preMap = new Map(pre.map(b => [keyOf(b), b]));
+      const postMap = new Map(post.map(b => [keyOf(b), b]));
+      const allKeys = new Set([...preMap.keys(), ...postMap.keys()]);
+      for (const k of allKeys) {
+        const p = preMap.get(k);
+        const q = postMap.get(k);
+        const owner = (q?.owner ?? p?.owner) as string | undefined;
+        if (owner !== walletStr) continue;
+        const mint = (q?.mint ?? p?.mint) as string;
+        const preAmt = parseFloat(p?.uiTokenAmount.uiAmountString ?? "0") || 0;
+        const postAmt = parseFloat(q?.uiTokenAmount.uiAmountString ?? "0") || 0;
+        const delta = postAmt - preAmt;
+        if (Math.abs(delta) < 1e-9) continue;
+        tokenDeltas.set(mint, (tokenDeltas.get(mint) ?? 0) + delta);
+      }
+
+      // Treat SOL + WSOL + stables as "value-like" — these are usually one side of a swap.
+      // The OTHER side is the actual token being bought or sold.
+      const isValueLike = (mint: string) => mint === SOL_MINT || STABLE_MINTS.has(mint);
+
+      // Compute total value-like signed flow (SOL + WSOL + stables).
+      // For SOL native, ignore values smaller than typical fee noise.
+      const meaningfulSol = Math.abs(solDelta) > 0.0001;
+      let valueFlow = meaningfulSol ? solDelta : 0; // positive = wallet received value; negative = wallet spent value
+      for (const [mint, d] of tokenDeltas) {
+        if (!isValueLike(mint)) continue;
+        // Stables are roughly $1, treat 1:1 with SOL for sign purposes is wrong — use a separate sign tracker
+        // But for direction inference, sign alone is what matters; magnitude doesn't.
+        valueFlow += d > 0 ? Math.max(0.0001, Math.min(d, 1)) : -Math.max(0.0001, Math.min(-d, 1));
+      }
+
+      // Find the largest NON-value-like token movement (the actual subject of buy/sell)
+      let topMint: string | null = null;
+      let topDelta = 0;
+      for (const [mint, d] of tokenDeltas) {
+        if (isValueLike(mint)) continue;
+        if (Math.abs(d) > Math.abs(topDelta)) { topMint = mint; topDelta = d; }
+      }
+
+      let type: ActivityEvent["type"] = "OTHER";
+      const valueOut = valueFlow < -0.0001;  // wallet paid value
+      const valueIn  = valueFlow >  0.0001;  // wallet received value
+
+      if (topMint && topDelta > 0 && valueOut)      type = "BUY";   // got tokens, paid value
+      else if (topMint && topDelta < 0 && valueIn)  type = "SELL";  // gave tokens, got value
+      else if (topMint && topDelta > 0 && !valueIn && !valueOut) type = "RECEIVE";
+      else if (topMint && topDelta < 0 && !valueIn && !valueOut) type = "SEND";
+      // Edge: token received WITHOUT paying value (airdrop) — keep RECEIVE
+      else if (topMint && topDelta > 0 && valueIn)  type = "RECEIVE";
+      else if (topMint && topDelta < 0 && valueOut) type = "SEND";
+
+      if (type !== "OTHER") {
+        activity.push({
+          signature: sig.signature,
+          timestamp: ts,
+          slot: sig.slot,
+          type,
+          tokenMint: topMint,
+          tokenSymbol: null, // filled in below
+          tokenAmount: topDelta,
+          solDelta,
+          valueUsd: null, // filled in below
+        });
+      }
+    }
+
+    // Enrich token metadata for both dev tokens and activity tokens (single batch)
+    const allMints = new Set<string>();
+    for (const m of devTokenMints) allMints.add(m);
+    for (const a of activity) if (a.tokenMint) allMints.add(a.tokenMint);
+    const tokenMeta = await getTokenMetadata([...allMints]);
+    const solPrice = await getSolPrice();
+
+    const devTokens: DevToken[] = [...devTokenMints].map(mint => {
+      const info = devTokenInfo.get(mint)!;
+      const m = tokenMeta[mint];
+      return {
+        mint,
+        symbol: m?.symbol ?? mint.slice(0, 6) + "…",
+        name: m?.name ?? "Unknown Token",
+        priceUsd: m?.priceUsd ?? 0,
+        marketCapUsd: null,
+        createdAt: info.createdAt,
+        signature: info.signature,
+      };
+    });
+
+    for (const a of activity) {
+      if (a.tokenMint) {
+        const m = tokenMeta[a.tokenMint];
+        a.tokenSymbol = m?.symbol ?? a.tokenMint.slice(0, 6) + "…";
+        if (m?.priceUsd && a.tokenAmount) {
+          a.valueUsd = Math.abs(a.tokenAmount) * m.priceUsd;
+        } else if (Math.abs(a.solDelta) > 0.0001 && solPrice > 0) {
+          a.valueUsd = Math.abs(a.solDelta) * solPrice;
+        }
+      }
+    }
+
+    res.json({
+      devTokens,
+      activity: activity.slice(0, 30),
+      scannedTxCount: parsed.filter(Boolean).length,
+    });
+  } catch (err) {
+    console.error("wallet/onchain error", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "On-chain scan failed. RPC may be rate-limiting." });
+    }
   }
 });
 

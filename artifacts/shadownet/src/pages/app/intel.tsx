@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Wallet, Users, Copy, Check, ExternalLink, AlertTriangle, ChevronRight, Activity, Zap, Star, Clock, Github, Shield, ShieldAlert, ShieldCheck, ThumbsUp, ThumbsDown, Code2, GitFork, Scale, FileText } from "lucide-react";
+import { Search, Wallet, Users, Copy, Check, ExternalLink, AlertTriangle, ChevronRight, Activity, Zap, Star, Clock, Github, Shield, ShieldAlert, ShieldCheck, ThumbsUp, ThumbsDown, Code2, GitFork, Scale, FileText, Sparkles, Rocket, Bell, BellOff, Trash2, ArrowDownLeft, ArrowUpRight, RefreshCw, X } from "lucide-react";
 
 const XLogo = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -22,6 +22,104 @@ interface WalletResult {
   firstActivity: string | null;
   lastActivity: string | null;
   score: number;
+  aiSummary: string;
+}
+
+interface DevToken {
+  mint: string;
+  symbol: string;
+  name: string;
+  priceUsd: number;
+  marketCapUsd: number | null;
+  createdAt: string | null;
+  signature: string;
+}
+
+interface ActivityEvent {
+  signature: string;
+  timestamp: string;
+  slot: number;
+  type: "BUY" | "SELL" | "RECEIVE" | "SEND" | "OTHER";
+  tokenMint: string | null;
+  tokenSymbol: string | null;
+  tokenAmount: number | null;
+  solDelta: number;
+  valueUsd: number | null;
+}
+
+interface OnchainResult {
+  devTokens: DevToken[];
+  activity: ActivityEvent[];
+  scannedTxCount: number;
+}
+
+interface TrackedWallet {
+  address: string;
+  label?: string;
+  addedAt: number;
+  lastSeenSig?: string;
+  notify?: boolean;
+}
+
+// ─── Tracked-wallets storage (localStorage; never sent to server) ────────────
+
+const TRACKED_KEY = "shadownet:tracked-wallets";
+
+function readTracked(): TrackedWallet[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(TRACKED_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(w => typeof w?.address === "string") : [];
+  } catch { return []; }
+}
+
+function writeTracked(list: TrackedWallet[]): void {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(TRACKED_KEY, JSON.stringify(list)); } catch {}
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("shadownet:tracked-changed"));
+  }
+}
+
+function isTracked(address: string): boolean {
+  return readTracked().some(w => w.address === address);
+}
+
+function toggleTracked(address: string, label?: string): boolean {
+  const list = readTracked();
+  const existing = list.findIndex(w => w.address === address);
+  if (existing >= 0) {
+    list.splice(existing, 1);
+    writeTracked(list);
+    return false;
+  }
+  list.unshift({ address, label, addedAt: Date.now(), notify: true });
+  writeTracked(list);
+  return true;
+}
+
+function updateTracked(address: string, patch: Partial<TrackedWallet>): void {
+  const list = readTracked();
+  const i = list.findIndex(w => w.address === address);
+  if (i < 0) return;
+  list[i] = { ...list[i], ...patch };
+  writeTracked(list);
+}
+
+function useTrackedList(): TrackedWallet[] {
+  const [list, setList] = useState<TrackedWallet[]>(() => readTracked());
+  useEffect(() => {
+    const handler = () => setList(readTracked());
+    window.addEventListener("shadownet:tracked-changed", handler);
+    window.addEventListener("storage", handler);
+    return () => {
+      window.removeEventListener("shadownet:tracked-changed", handler);
+      window.removeEventListener("storage", handler);
+    };
+  }, []);
+  return list;
 }
 
 interface CAResult {
@@ -158,129 +256,471 @@ function ScoreRing({ score, size = 72 }: { score: number; size?: number }) {
 
 // ─── Wallet Analyzer ─────────────────────────────────────────────────────────
 
+function ActivityIcon({ type }: { type: ActivityEvent["type"] }) {
+  const map = {
+    BUY:     { Icon: ArrowDownLeft, color: "#39FF14", label: "BUY" },
+    SELL:    { Icon: ArrowUpRight, color: "#ef4444", label: "SELL" },
+    RECEIVE: { Icon: ArrowDownLeft, color: "#8B5CF6", label: "IN" },
+    SEND:    { Icon: ArrowUpRight, color: "#f59e0b", label: "OUT" },
+    OTHER:   { Icon: Activity,     color: "#ffffff66", label: "TX" },
+  } as const;
+  const m = map[type];
+  return (
+    <div className="flex items-center gap-1.5">
+      <m.Icon className="w-3.5 h-3.5" style={{ color: m.color }} />
+      <span className="text-[9px] font-mono tracking-widest" style={{ color: m.color }}>{m.label}</span>
+    </div>
+  );
+}
+
+function TrackButton({ address, label }: { address: string; label?: string }) {
+  const [tracked, setTracked] = useState(false);
+  useEffect(() => { setTracked(isTracked(address)); }, [address]);
+
+  const click = async () => {
+    const wasOff = !tracked;
+    const nowTracked = toggleTracked(address, label);
+    setTracked(nowTracked);
+    // Request notification permission the first time someone enables tracking
+    if (wasOff && nowTracked && typeof Notification !== "undefined" && Notification.permission === "default") {
+      try { await Notification.requestPermission(); } catch {}
+    }
+  };
+
+  return (
+    <button onClick={click}
+      className={`px-3 py-2 rounded-lg border text-[10px] font-mono tracking-widest transition-colors flex items-center gap-1.5 ${
+        tracked
+          ? "bg-secondary/15 border-secondary/40 text-secondary hover:bg-secondary/25"
+          : "bg-white/[0.03] border-white/10 text-white/60 hover:bg-white/[0.07] hover:text-white"
+      }`}>
+      {tracked ? <BellOff className="w-3 h-3" /> : <Bell className="w-3 h-3" />}
+      {tracked ? "TRACKING" : "TRACK WALLET"}
+    </button>
+  );
+}
+
 function WalletAnalyzer() {
+  const [tab, setTab] = useState<"analyze" | "tracked">("analyze");
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<WalletResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [onchain, setOnchain] = useState<OnchainResult | null>(null);
+  const [onchainLoading, setOnchainLoading] = useState(false);
 
   const analyze = async () => {
     if (!address.trim()) return;
-    setLoading(true); setError(null); setResult(null);
-    try { setResult(await callApi<WalletResult>("intelligence/wallet", { address: address.trim() })); }
-    catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
-    finally { setLoading(false); }
+    setLoading(true); setError(null); setResult(null); setOnchain(null);
+    try {
+      const r = await callApi<WalletResult>("intelligence/wallet", { address: address.trim() });
+      setResult(r);
+      // Lazy-load on-chain details (dev tokens + activity) without blocking the main view
+      setOnchainLoading(true);
+      callApi<OnchainResult>("intelligence/wallet/onchain", { address: r.address, limit: 80 })
+        .then(setOnchain)
+        .catch(() => setOnchain({ devTokens: [], activity: [], scannedTxCount: 0 }))
+        .finally(() => setOnchainLoading(false));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const trackedList = useTrackedList();
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-base font-mono font-bold text-white mb-1">Wallet Analyzer</h2>
-        <p className="text-xs font-mono text-white/35">Paste any Solana address to inspect holdings, activity & score.</p>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-base font-mono font-bold text-white mb-1">Wallet Analyzer</h2>
+          <p className="text-xs font-mono text-white/35">Paste any Solana address to inspect holdings, activity & score.</p>
+        </div>
       </div>
 
-      {/* Input */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
-          <input value={address} onChange={e => setAddress(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && analyze()}
-            placeholder="Solana wallet address…"
-            className="w-full bg-black border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-colors" />
-        </div>
-        <button onClick={analyze} disabled={loading || !address.trim()}
-          className="px-4 py-3 bg-primary text-black font-mono font-bold text-xs rounded-lg hover:bg-white transition-colors disabled:opacity-40 tracking-widest">
-          {loading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}><Search className="w-4 h-4" /></motion.div> : <Search className="w-4 h-4" />}
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-lg border border-white/8 bg-black/40">
+        <button onClick={() => setTab("analyze")}
+          className={`flex-1 px-3 py-2 rounded-md text-[10px] font-mono tracking-widest transition-colors flex items-center justify-center gap-1.5 ${
+            tab === "analyze" ? "bg-primary/15 text-primary" : "text-white/40 hover:text-white/70"
+          }`}>
+          <Search className="w-3 h-3" /> ANALYZE
+        </button>
+        <button onClick={() => setTab("tracked")}
+          className={`flex-1 px-3 py-2 rounded-md text-[10px] font-mono tracking-widest transition-colors flex items-center justify-center gap-1.5 ${
+            tab === "tracked" ? "bg-secondary/15 text-secondary" : "text-white/40 hover:text-white/70"
+          }`}>
+          <Bell className="w-3 h-3" /> TRACKED {trackedList.length > 0 && <span className="text-[9px] opacity-70">({trackedList.length})</span>}
         </button>
       </div>
 
-      {error && (
-        <div className="p-4 rounded-lg border border-red-500/20 bg-red-500/5 flex gap-3">
-          <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-          <p className="text-xs font-mono text-red-400">{error}</p>
-        </div>
+      {tab === "analyze" && (
+        <>
+          {/* Input */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
+              <input value={address} onChange={e => setAddress(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && analyze()}
+                placeholder="Solana wallet address…"
+                className="w-full bg-black border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-colors" />
+            </div>
+            <button onClick={analyze} disabled={loading || !address.trim()}
+              className="px-4 py-3 bg-primary text-black font-mono font-bold text-xs rounded-lg hover:bg-white transition-colors disabled:opacity-40 tracking-widest">
+              {loading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}><Search className="w-4 h-4" /></motion.div> : <Search className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {error && (
+            <div className="p-4 rounded-lg border border-red-500/20 bg-red-500/5 flex gap-3">
+              <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-xs font-mono text-red-400">{error}</p>
+            </div>
+          )}
+
+          <AnimatePresence>
+            {result && (
+              <motion.div key={result.address} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                {/* Header Card */}
+                <div className="p-5 rounded-xl border border-white/8 bg-white/[0.02]">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex-1 min-w-0 mr-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-xs font-mono text-white/30">ADDRESS</p>
+                        <CopyButton text={result.address} />
+                      </div>
+                      <p className="text-xs font-mono text-white truncate">{result.address.slice(0,16)}…{result.address.slice(-8)}</p>
+                    </div>
+                    <ScoreRing score={result.score} />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    {[
+                      { label: "PORTFOLIO", value: fmtUsd(result.totalUsd) },
+                      { label: "SOL BALANCE", value: result.solBalance.toFixed(3) + " SOL" },
+                      { label: "TRANSACTIONS", value: result.txCount >= 100 ? "100+" : String(result.txCount) },
+                    ].map(s => (
+                      <div key={s.label} className="p-3 rounded-lg bg-black/40 text-center">
+                        <p className="text-[9px] font-mono text-white/25 uppercase tracking-wider mb-1">{s.label}</p>
+                        <p className="text-sm font-mono font-bold text-white">{s.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Track button */}
+                  <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/6">
+                    <p className="text-[10px] font-mono text-white/30 leading-relaxed">
+                      Get a feed of buys & sells from this wallet.
+                    </p>
+                    <TrackButton address={result.address} />
+                  </div>
+                </div>
+
+                {/* AI Analysis */}
+                {result.aiSummary && (
+                  <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-500/[0.04]">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      <p className="text-[10px] font-mono text-purple-400 tracking-widest">AI ANALYSIS</p>
+                    </div>
+                    <p className="text-xs font-mono text-white/75 leading-relaxed">{result.aiSummary}</p>
+                  </div>
+                )}
+
+                {/* Activity timestamps */}
+                {(result.firstActivity || result.lastActivity) && (
+                  <div className="flex gap-3">
+                    {result.firstActivity && (
+                      <div className="flex-1 p-3 rounded-lg border border-white/6 bg-black/30">
+                        <p className="text-[9px] font-mono text-white/25 uppercase mb-1">First Active</p>
+                        <p className="text-xs font-mono text-white/60">{timeAgo(result.firstActivity)}</p>
+                      </div>
+                    )}
+                    {result.lastActivity && (
+                      <div className="flex-1 p-3 rounded-lg border border-white/6 bg-black/30">
+                        <p className="text-[9px] font-mono text-white/25 uppercase mb-1">Last Active</p>
+                        <p className="text-xs font-mono text-primary">{timeAgo(result.lastActivity)}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Dev Tokens (coins launched by this wallet) */}
+                <div className="rounded-xl border border-primary/20 bg-primary/[0.03] overflow-hidden">
+                  <div className="px-4 py-3 border-b border-primary/15 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Rocket className="w-3.5 h-3.5 text-primary" />
+                      <p className="text-[10px] font-mono text-primary tracking-widest">DEV TOKENS — COINS LAUNCHED</p>
+                    </div>
+                    {onchainLoading && (
+                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+                        <RefreshCw className="w-3 h-3 text-primary/50" />
+                      </motion.div>
+                    )}
+                  </div>
+                  {onchainLoading && !onchain ? (
+                    <p className="text-[10px] font-mono text-white/30 text-center py-5">Scanning recent transactions…</p>
+                  ) : onchain && onchain.devTokens.length > 0 ? (
+                    <div className="divide-y divide-white/5">
+                      {onchain.devTokens.map(t => (
+                        <div key={t.mint} className="flex items-center gap-3 px-4 py-3">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center shrink-0">
+                            <span className="text-[9px] font-mono text-primary font-bold">{t.symbol.slice(0,3).toUpperCase()}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-mono text-white font-bold truncate">{t.symbol} <span className="text-white/40 font-normal">{t.name && t.name !== "Unknown Token" ? `· ${t.name}` : ""}</span></p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <p className="text-[10px] font-mono text-white/30 truncate">{t.mint.slice(0,16)}…</p>
+                              <CopyButton text={t.mint} />
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            {t.priceUsd > 0 ? (
+                              <p className="text-xs font-mono text-white">${t.priceUsd < 0.01 ? t.priceUsd.toFixed(7) : t.priceUsd.toFixed(4)}</p>
+                            ) : (
+                              <p className="text-[10px] font-mono text-white/30">no price</p>
+                            )}
+                            {t.createdAt && <p className="text-[9px] font-mono text-white/30">{timeAgo(t.createdAt)}</p>}
+                          </div>
+                          <a href={`https://dexscreener.com/solana/${t.mint}`} target="_blank" rel="noopener noreferrer"
+                            className="text-white/30 hover:text-primary transition-colors shrink-0">
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] font-mono text-white/30 text-center py-5">
+                      No coins launched detected{onchain ? ` in last ${onchain.scannedTxCount} txs` : ""}.
+                    </p>
+                  )}
+                </div>
+
+                {/* Token Holdings */}
+                {result.tokens.length > 0 && (
+                  <div className="rounded-xl border border-white/8 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-white/6 bg-black/40 flex items-center justify-between">
+                      <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Token Holdings</p>
+                      <p className="text-[10px] font-mono text-white/25">{result.tokenCount} tokens</p>
+                    </div>
+                    <div className="divide-y divide-white/5">
+                      {result.tokens.slice(0, 10).map(t => (
+                        <div key={t.mint} className="flex items-center gap-3 px-4 py-3">
+                          <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                            <span className="text-[9px] font-mono text-primary font-bold">{t.symbol.slice(0,3)}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-mono text-white font-bold">{t.symbol}</p>
+                            <p className="text-[10px] font-mono text-white/30 truncate">{t.mint.slice(0,12)}…</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-mono text-white">{t.valueUsd > 0 ? fmtUsd(t.valueUsd) : "—"}</p>
+                            <p className="text-[10px] font-mono text-white/30">{t.amount > 0.001 ? fmtNum(t.amount) : "<0.001"}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {result.tokens.length === 0 && (
+                  <p className="text-xs font-mono text-white/25 text-center py-4">No token holdings found.</p>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
       )}
 
-      <AnimatePresence>
-        {result && (
-          <motion.div key={result.address} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-            {/* Header Card */}
-            <div className="p-5 rounded-xl border border-white/8 bg-white/[0.02]">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex-1 min-w-0 mr-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-xs font-mono text-white/30">ADDRESS</p>
-                    <CopyButton text={result.address} />
-                  </div>
-                  <p className="text-xs font-mono text-white truncate">{result.address.slice(0,16)}…{result.address.slice(-8)}</p>
-                </div>
-                <ScoreRing score={result.score} />
+      {tab === "tracked" && <TrackedWalletsView />}
+    </div>
+  );
+}
+
+// ─── Tracked Wallets Feed ─────────────────────────────────────────────────────
+
+function TrackedWalletsView() {
+  const tracked = useTrackedList();
+  const [feeds, setFeeds] = useState<Record<string, OnchainResult | null>>({});
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const lastSeenRef = useRef<Record<string, string | undefined>>({});
+  // Per-wallet monotonic request ID + already-notified sig set to prevent stale/duplicate notifications.
+  const reqIdRef = useRef<Record<string, number>>({});
+  const notifiedRef = useRef<Record<string, Set<string>>>({});
+
+  const refreshOne = useCallback(async (addr: string, options?: { silent?: boolean }) => {
+    const myId = (reqIdRef.current[addr] ?? 0) + 1;
+    reqIdRef.current[addr] = myId;
+    setLoading(s => ({ ...s, [addr]: true }));
+    try {
+      const r = await callApi<OnchainResult>("intelligence/wallet/onchain", { address: addr, limit: 60 });
+      // Drop stale responses — only the latest in-flight request applies
+      if (reqIdRef.current[addr] !== myId) return;
+
+      setFeeds(s => ({ ...s, [addr]: r }));
+
+      const prevSig = lastSeenRef.current[addr];
+      const newest = r.activity[0];
+      if (newest && newest.signature !== prevSig) {
+        if (prevSig && !options?.silent) {
+          // Find all events newer than prevSig
+          const newEvents: ActivityEvent[] = [];
+          for (const ev of r.activity) {
+            if (ev.signature === prevSig) break;
+            newEvents.push(ev);
+          }
+          if (newEvents.length > 0 && typeof Notification !== "undefined" && Notification.permission === "granted") {
+            const seen = (notifiedRef.current[addr] ??= new Set());
+            const e = newEvents.find(ev => !seen.has(ev.signature));
+            if (e) {
+              seen.add(e.signature);
+              const short = addr.slice(0, 4) + "…" + addr.slice(-4);
+              try {
+                new Notification(`ShadowNet: ${e.type} on ${short}`, {
+                  body: `${e.tokenSymbol ?? "token"} ${e.tokenAmount ? fmtNum(Math.abs(e.tokenAmount)) : ""}${e.valueUsd ? ` (≈${fmtUsd(e.valueUsd)})` : ""}`,
+                  tag: `shadownet-${addr}-${e.signature}`,
+                  silent: false,
+                });
+              } catch {}
+            }
+          }
+        }
+        lastSeenRef.current[addr] = newest.signature;
+        updateTracked(addr, { lastSeenSig: newest.signature });
+      }
+    } catch {
+      if (reqIdRef.current[addr] !== myId) return;
+      setFeeds(s => ({ ...s, [addr]: s[addr] ?? { devTokens: [], activity: [], scannedTxCount: 0 } }));
+    } finally {
+      if (reqIdRef.current[addr] === myId) {
+        setLoading(s => ({ ...s, [addr]: false }));
+      }
+    }
+  }, []);
+
+  // Initial load + bootstrap lastSeenSig from localStorage
+  useEffect(() => {
+    for (const w of tracked) {
+      if (w.lastSeenSig) lastSeenRef.current[w.address] = w.lastSeenSig;
+      if (!feeds[w.address]) refreshOne(w.address, { silent: true });
+    }
+    // Cleanup feeds for removed wallets
+    setFeeds(prev => {
+      const addrs = new Set(tracked.map(t => t.address));
+      const next: typeof prev = {};
+      for (const [k, v] of Object.entries(prev)) if (addrs.has(k)) next[k] = v;
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracked.map(t => t.address).join("|")]);
+
+  // Auto-poll every 45s while this view is mounted
+  useEffect(() => {
+    if (tracked.length === 0) return;
+    const id = window.setInterval(() => {
+      for (const w of tracked) refreshOne(w.address);
+    }, 45_000);
+    return () => window.clearInterval(id);
+  }, [tracked, refreshOne]);
+
+  if (tracked.length === 0) {
+    return (
+      <div className="py-12 text-center space-y-2">
+        <div className="w-12 h-12 mx-auto rounded-full bg-secondary/10 border border-secondary/20 flex items-center justify-center mb-3">
+          <Bell className="w-5 h-5 text-secondary/60" />
+        </div>
+        <p className="text-sm font-mono text-white/60">No wallets tracked yet</p>
+        <p className="text-xs font-mono text-white/30 max-w-sm mx-auto leading-relaxed">
+          Analyze a wallet then hit <span className="text-secondary">TRACK WALLET</span> to follow its buys and sells. Tracked wallets are stored only in this browser — never sent to ShadowNet.
+        </p>
+      </div>
+    );
+  }
+
+  const totalEvents = Object.values(feeds).reduce((s, f) => s + (f?.activity.length ?? 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-mono text-white/40 tracking-widest">
+          {tracked.length} TRACKED · {totalEvents} EVENTS · POLLS EVERY 45s
+        </p>
+        <button onClick={() => { for (const w of tracked) refreshOne(w.address); }}
+          className="text-[10px] font-mono text-white/40 hover:text-primary transition-colors flex items-center gap-1.5">
+          <RefreshCw className="w-3 h-3" /> REFRESH ALL
+        </button>
+      </div>
+
+      {tracked.map(w => {
+        const feed = feeds[w.address];
+        const isLoading = loading[w.address];
+        return (
+          <div key={w.address} className="rounded-xl border border-white/8 bg-white/[0.02] overflow-hidden">
+            <div className="px-4 py-3 border-b border-white/6 bg-black/40 flex items-center gap-3">
+              <div className="w-7 h-7 rounded-full bg-secondary/10 border border-secondary/30 flex items-center justify-center shrink-0">
+                <Wallet className="w-3.5 h-3.5 text-secondary" />
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: "PORTFOLIO", value: fmtUsd(result.totalUsd) },
-                  { label: "SOL BALANCE", value: result.solBalance.toFixed(3) + " SOL" },
-                  { label: "TRANSACTIONS", value: result.txCount >= 100 ? "100+" : String(result.txCount) },
-                ].map(s => (
-                  <div key={s.label} className="p-3 rounded-lg bg-black/40 text-center">
-                    <p className="text-[9px] font-mono text-white/25 uppercase tracking-wider mb-1">{s.label}</p>
-                    <p className="text-sm font-mono font-bold text-white">{s.value}</p>
-                  </div>
-                ))}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-mono text-white truncate">{w.address.slice(0,12)}…{w.address.slice(-6)}</p>
+                <p className="text-[9px] font-mono text-white/30">added {timeAgo(new Date(w.addedAt).toISOString())}</p>
               </div>
+              <button onClick={() => refreshOne(w.address)}
+                title="Refresh now"
+                className="text-white/30 hover:text-primary transition-colors p-1">
+                {isLoading ? (
+                  <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </motion.div>
+                ) : <RefreshCw className="w-3.5 h-3.5" />}
+              </button>
+              <button onClick={() => toggleTracked(w.address)}
+                title="Stop tracking"
+                className="text-white/30 hover:text-red-400 transition-colors p-1">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            {/* Activity */}
-            {(result.firstActivity || result.lastActivity) && (
-              <div className="flex gap-3">
-                {result.firstActivity && (
-                  <div className="flex-1 p-3 rounded-lg border border-white/6 bg-black/30">
-                    <p className="text-[9px] font-mono text-white/25 uppercase mb-1">First Active</p>
-                    <p className="text-xs font-mono text-white/60">{timeAgo(result.firstActivity)}</p>
-                  </div>
-                )}
-                {result.lastActivity && (
-                  <div className="flex-1 p-3 rounded-lg border border-white/6 bg-black/30">
-                    <p className="text-[9px] font-mono text-white/25 uppercase mb-1">Last Active</p>
-                    <p className="text-xs font-mono text-primary">{timeAgo(result.lastActivity)}</p>
-                  </div>
-                )}
-              </div>
+            {!feed && isLoading && (
+              <p className="text-[10px] font-mono text-white/30 text-center py-5">Scanning…</p>
             )}
-
-            {/* Token Holdings */}
-            {result.tokens.length > 0 && (
-              <div className="rounded-xl border border-white/8 overflow-hidden">
-                <div className="px-4 py-3 border-b border-white/6 bg-black/40 flex items-center justify-between">
-                  <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Token Holdings</p>
-                  <p className="text-[10px] font-mono text-white/25">{result.tokenCount} tokens</p>
-                </div>
-                <div className="divide-y divide-white/5">
-                  {result.tokens.slice(0, 10).map(t => (
-                    <div key={t.mint} className="flex items-center gap-3 px-4 py-3">
-                      <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                        <span className="text-[9px] font-mono text-primary font-bold">{t.symbol.slice(0,3)}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-mono text-white font-bold">{t.symbol}</p>
-                        <p className="text-[10px] font-mono text-white/30 truncate">{t.mint.slice(0,12)}…</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs font-mono text-white">{t.valueUsd > 0 ? fmtUsd(t.valueUsd) : "—"}</p>
-                        <p className="text-[10px] font-mono text-white/30">{t.amount > 0.001 ? fmtNum(t.amount) : "<0.001"}</p>
-                      </div>
+            {feed && feed.activity.length === 0 && (
+              <p className="text-[10px] font-mono text-white/30 text-center py-5">
+                No buy/sell activity in last {feed.scannedTxCount} txs.
+              </p>
+            )}
+            {feed && feed.activity.length > 0 && (
+              <div className="divide-y divide-white/5">
+                {feed.activity.slice(0, 10).map(ev => (
+                  <a key={ev.signature}
+                    href={`https://solscan.io/tx/${ev.signature}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.02] transition-colors">
+                    <div className="shrink-0">
+                      <ActivityIcon type={ev.type} />
                     </div>
-                  ))}
-                </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-mono text-white font-bold truncate">
+                          {ev.tokenAmount ? fmtNum(Math.abs(ev.tokenAmount)) : ""} {ev.tokenSymbol ?? "?"}
+                        </p>
+                        {ev.valueUsd && <span className="text-[10px] font-mono text-white/40">≈ {fmtUsd(ev.valueUsd)}</span>}
+                      </div>
+                      <p className="text-[9px] font-mono text-white/25">
+                        {timeAgo(ev.timestamp)}{Math.abs(ev.solDelta) > 0.001 ? ` · ${ev.solDelta > 0 ? "+" : ""}${ev.solDelta.toFixed(3)} SOL` : ""}
+                      </p>
+                    </div>
+                    <ExternalLink className="w-3 h-3 text-white/20 shrink-0" />
+                  </a>
+                ))}
               </div>
             )}
+          </div>
+        );
+      })}
 
-            {result.tokens.length === 0 && (
-              <p className="text-xs font-mono text-white/25 text-center py-4">No token holdings found.</p>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <p className="text-[9px] font-mono text-white/20 text-center leading-relaxed pt-2">
+        Notifications are sent only by your browser. Tracked wallet list lives in <span className="text-white/40">localStorage</span> on this device — never uploaded.
+      </p>
     </div>
   );
 }
