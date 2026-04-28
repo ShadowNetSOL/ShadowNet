@@ -54,11 +54,14 @@
     *Initiate Stealth* → *Launch Target Site*. Sessions last up to one hour.
 
   ### 2. Anonymous Wallet Generation
-  - Generates **Solana Ed25519 keypairs** using **BIP-39 mnemonics** via
-    standard Solana libraries
+  - **Generated 100% in your browser** — the server never sees your mnemonic
+    or private key. There is no key endpoint to compromise.
+  - Uses audited Web3-grade primitives: `@scure/bip39` (mnemonic),
+    `@noble/ed25519` (signing), and SLIP-0010 hardened derivation on the
+    standard Solana path `m/44'/501'/0'/0'`
   - Compatible with **Phantom**, **Solflare**, and other Solana wallets
-  - Designed to avoid persisting key material on the platform; users are
-    responsible for secure handling and backup
+  - Keys live only in volatile browser memory — refresh the page and they
+    are gone. Save the mnemonic offline before navigating away.
   - **Importing into a wallet:** see the in-app guidance under
     *Anonymous Wallet → Export Options*. Treat any private key or seed phrase
     as you would a password — store offline or in an encrypted vault.
