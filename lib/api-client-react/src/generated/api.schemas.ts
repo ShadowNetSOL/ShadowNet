@@ -9,19 +9,6 @@ export interface HealthStatus {
   status: string;
 }
 
-export interface GeneratedWallet {
-  /** Solana public key (Base58) */
-  publicKey: string;
-  /** Private key (Base58) - importable into Phantom */
-  privateKey: string;
-  /** 12-word mnemonic phrase */
-  mnemonic: string;
-  /** BIP44 derivation path used */
-  derivationPath: string;
-  /** ISO timestamp of generation */
-  createdAt: string;
-}
-
 export type RelayNodeStatus =
   (typeof RelayNodeStatus)[keyof typeof RelayNodeStatus];
 

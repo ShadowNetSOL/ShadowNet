@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { useGenerateWallet } from "@workspace/api-client-react";
-import type { GeneratedWallet } from "@workspace/api-client-react/src/generated/api.schemas";
+import { useGenerateWallet, type GeneratedWallet } from "@/lib/wallet";
 import { TerminalBlock, TerminalLine } from "@/components/terminal-block";
 import { Key, Eye, EyeOff, Copy, Check, AlertOctagon, Wallet as WalletIcon, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";

@@ -9,8 +9,6 @@ servers:
 tags:
   - name: health
     description: Health operations
-  - name: wallet
-    description: Anonymous Solana wallet generation
   - name: relay
     description: Relay network operations
   - name: session
@@ -29,20 +27,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
-
-  /wallet/generate:
-    post:
-      operationId: generateWallet
-      tags: [wallet]
-      summary: Generate anonymous Solana wallet
-      description: Generates a new Ed25519 keypair for Solana, returning public key, private key (Base58), and mnemonic phrase. Keys are generated server-side and never stored.
-      responses:
-        "200":
-          description: Generated wallet
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GeneratedWallet"
 
   /relay/nodes:
     get:
@@ -127,31 +111,6 @@ components:
           type: string
       required:
         - status
-
-    GeneratedWallet:
-      type: object
-      properties:
-        publicKey:
-          type: string
-          description: Solana public key (Base58)
-        privateKey:
-          type: string
-          description: Private key (Base58) - importable into Phantom
-        mnemonic:
-          type: string
-          description: 12-word mnemonic phrase
-        derivationPath:
-          type: string
-          description: BIP44 derivation path used
-        createdAt:
-          type: string
-          description: ISO timestamp of generation
-      required:
-        - publicKey
-        - privateKey
-        - mnemonic
-        - derivationPath
-        - createdAt
 
     RelayNode:
       type: object
