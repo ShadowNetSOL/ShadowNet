@@ -1,186 +1,185 @@
 # 🌑 ShadowNet
-## ⚠️ Experimental Project Notice
 
-ShadowNet is an experimental privacy-focused platform currently under active development.
-> ⚠️ ShadowNet is currently in active development and should be considered experimental infrastructure.
-- Relay infrastructure is in progress and not yet independently audited
-- Public relay services are used temporarily as fallback nodes
-- Privacy features aim to reduce tracking, but do not guarantee anonymity
-- This project should not be relied on for sensitive or high-risk use cases
+  > **Privacy-native access layer for Web3** — interact with decentralized
+  > applications while reducing exposure of your IP, session data, and device
+  > fingerprint.
 
-For full details, see RELAYS.md and SECURITY.md.
-<!-- Hero Section -->
-![Hero Banner](https://ibb.co/Df0KnTh2)  
-![Gradient Hero](https://img.shields.io/badge/ShadowNet-Privacy--Focused-blueviolet?style=for-the-badge&logo=blockchain)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+  [![CI](https://img.shields.io/github/actions/workflow/status/ShadowNetSOL/ShadowNet/ci.yml?branch=main&label=CI)](https://github.com/ShadowNetSOL/ShadowNet/actions)
+  [![Solana](https://img.shields.io/badge/Solana-mainnet-success)](https://solana.com)
+  [![Status: Experimental](https://img.shields.io/badge/status-experimental-orange.svg)](./STATUS.md)
 
-![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-![GitHub Workflow](https://img.shields.io/badge/GitHub-Workflow-blueviolet.svg)
-![Solana](https://img.shields.io/badge/Solana-mainnet-success)
+  [![🌐 Get Started](https://img.shields.io/badge/Get_Started-app--shadownet.net-brightgreen?style=for-the-badge)](https://app-shadownet.net)
 
-**Privacy-native access layer for Web3**  
-Interact with decentralized applications while reducing direct exposure of your IP, session data, and device fingerprint.
-For details on relay infrastructure, see RELAYS.md
-[![🌐 Get Started](https://img.shields.io/badge/Get_Started-app--shadownet.net-brightgreen?style=for-the-badge)](https://app-shadownet.net)
+  ---
 
----
+  ## ⚠️ Experimental Project Notice
 
-## 🎬 Live Demo & Features
+  ShadowNet is an experimental privacy-focused platform under active development.
 
-**Animated Demo GIF:**  
-[![ShadowNet Demo](https://makeagif.com/i/2R7sLJ)](https://app-shadownet.net)
+  - Relay infrastructure is in progress and **has not been independently audited**
+  - Public relay services are used temporarily as fallback nodes
+  - Privacy features aim to **reduce** tracking, not guarantee anonymity
+  - This project should **not** be relied on for sensitive or high-risk use cases
 
-**Key Features:**
+  For full details, see [RELAY.md](./RELAY.md), [SECURITY.md](./SECURITY.md),
+  [STATUS.md](./STATUS.md), and [THREAT_MODEL.md](./THREAT_MODEL.md).
 
-- 🔐 **Stealth Sessions** – randomized fingerprints, isolated sessions, IP cloaking  
-- 🧩 **Anonymous Solana Wallets** – Ed25519 keypairs, zero retention  
-- 🌐 **Global Relay Network** 
-- **Hybrid relay system (temporary public + planned private nodes)**
-- Public relay endpoints are used during early development
-- Dedicated ShadowNet relay infrastructure is currently in development
-- Future releases will introduce independently audited, no-log relay nodes
-- - Some relay endpoints may be rate-limited or unavailable depending on external providers
-- 🕵️ **Intel Hub** – on-chain + social intelligence for anonymous due diligence  
-- ⚡ **User-friendly** – clean interface, full Web3 compatibility  
+  ---
 
-**Live Preview Thumbnail:**  
-[![ShadowNet Live Preview](https://replit.com/@ShadowNetSOL/ShadowNet.svg?sanitize=true)](https://app-shadownet.net)
+  ## 🧠 What is ShadowNet?
 
-> ✨ Click the GIF, live preview, or **Get Started** button to open the live site instantly.  
-> Mobile-friendly: GIFs and features stack vertically.
+  ShadowNet is a **privacy-native access layer for the decentralized web**.
+  It combines four independent modules — **stealth sessions, anonymous wallets,
+  a relay network, and on-chain intelligence (Intel Hub)** — into a single
+  session-and-relay architecture aimed at reducing identity, location, and
+  device-fingerprint exposure.
 
----
+  ShadowNet is **not a VPN replacement** and is **not a substitute** for hardened
+  operational security. See [THREAT_MODEL.md](./THREAT_MODEL.md) for what it
+  does and does not protect against.
 
-## 🧠 What is ShadowNet?
+  ---
 
-**ShadowNet** is a **privacy-native access layer for the decentralized web**. It empowers individuals, researchers, and builders to interact with **Web3 applications and the open internet** without exposing their **identity, location, or device fingerprint**. 
+  ## ✨ Key Features
 
-ShadowNet combines four independent modules — **stealth sessions, anonymous wallets, a global relay network, and on-chain intelligence (Intel Hub)** — to deliver a **comprehensive, privacy-focused session and relay architecture**.
+  ### 1. Stealth Sessions
+  - Sandboxed sessions with **randomized fingerprints** per launch
+  - Randomized attributes: user-agent, screen resolution, color depth, timezone,
+    language, platform, WebGL strings, canvas hash, audio hash, font list
+  - Traffic routed through **relay nodes** to mask the originating IP
+  - **Session isolation** prevents cookies, cache, or storage from leaking
+    across sessions
+  - **How to use:** Stealth Sessions → enter target URL → select relay node →
+    *Initiate Stealth* → *Launch Target Site*. Sessions last up to one hour.
 
-### 🌟 Core Features
+  ### 2. Anonymous Wallet Generation
+  - Generates **Solana Ed25519 keypairs** using **BIP-39 mnemonics** via
+    standard Solana libraries
+  - Compatible with **Phantom**, **Solflare**, and other Solana wallets
+  - Designed to avoid persisting key material on the platform; users are
+    responsible for secure handling and backup
+  - **Importing into a wallet:** see the in-app guidance under
+    *Anonymous Wallet → Export Options*. Treat any private key or seed phrase
+    as you would a password — store offline or in an encrypted vault.
+  - ShadowNet **cannot recover lost keys**
 
-#### 1. Stealth Sessions
-- Fully sandboxed sessions with **fresh randomized fingerprints**. 
-- Randomized attributes: **user-agent, screen resolution, color depth, timezone, language, platform, WebGL strings, canvas hash, audio hash, font list**.  
-- Traffic routed via **relay nodes**, masking your real IP.  
-- **Session isolation** prevents cookies, cache, or storage from leaking across sessions.  
-- **How to use:** Stealth Sessions → enter target URL → select relay node → **INITIATE STEALTH** → **LAUNCH TARGET SITE**. Session lasts up to one hour.
+  > ⚠️ Never paste a private key or seed phrase into any website, chat, or
+  > document you do not fully control.
 
-#### 2. Anonymous Wallet Generation
-- Generates **Solana Ed25519 keypairs** via **BIP-39 mnemonics**.  
-- Fully compatible with **Phantom and other Solana wallets**.  
-- ** Keys are generated per session and not intended for persistent storage within the platform. Users are responsible for secure handling.
-- **Importing:** Copy private key → Phantom → Add / Connect Wallet → Import Private Key → paste.  
-- **Security guidance:** Store keys offline or encrypted; ShadowNet cannot recover lost keys.
+  ### 3. Relay Network
+  - Curated relay-based routing (centrally operated in the current version)
+  - Select nodes by latency, geographic location, or jurisdiction
+  - Node status: online / maintenance / offline, with auto-refresh
+  - Destination servers see only the relay IP, not your real IP
+  - See [RELAY.md](./RELAY.md) for the full relay model and roadmap
 
-#### 3. Global Relay Network
-- **Curated network of relay-based routing infrastructure (centrally operated in current version)**.  
-- Select nodes by **latency, geographic location, or jurisdiction**.  
-- Node status: online, maintenance, offline; auto-refresh available.  
-- Destination servers only see relay IP, never your real IP.
+  ### 4. Intel Hub
+  - **Wallet Analyzer** — transaction history, PnL, frequently held assets
+  - **X CA Checker** — scans X (Twitter) accounts for Solana contract
+    addresses
+  - **Smart Followers** — identifies high-signal on-chain followers as social
+    alpha indicators
+  - **GitHub Scanner** — heuristic + AI-assisted trust scoring for any
+    public GitHub repository
 
-#### 4. Intel Hub
-- Aggregates **on-chain and social intelligence**.  
-- **Wallet Analyzer:** transaction history, PnL, frequently held assets.  
-- **X CA Checker:** scans X (Twitter) accounts for Solana contract addresses mentioned.  
-- **Smart Followers:** identifies high-signal on-chain followers for social alpha indicators.
+  ---
 
----
+  ## 🛡 Security Model (Summary)
 
-### 🔐 Why ShadowNet?
+  ShadowNet implements several defensive mechanisms server-side:
 
-Modern tracking infrastructure is highly sophisticated. Websites track users via dozens of **passive signals**: canvas, WebGL, audio, fonts, screen geometry, etc. Standard privacy tools cover some vectors but rarely all. ShadowNet closes **every gap** across **all layers**:
+  - URL validation and protocol enforcement (only `http` and `https`)
+  - Private/internal IP range blocking (SSRF protection)
+  - Rate limiting and request throttling on all API routes
+  - Timeout protection on outbound requests
+  - Header sanitization and controlled response handling
+  - WebRTC, geolocation, and service-worker overrides in stealth sessions
 
-- **Device & fingerprint anonymization**  
-- **Session isolation & IP cloaking**  
-- **Anonymous wallet generation**  
-- **Encrypted traffic routing through audited relay nodes**  
-- **On-chain & social intelligence analysis without revealing identity**
+  For the full model, limitations, and known caveats, see
+  [SECURITY.md](./SECURITY.md).
 
-> **Not just a VPN. The entire stack.**  
-> ShadowNet is designed to minimise exposure across device, session, and network layers*, providing ** enhanced privacy access to Web3 environments**.
+  ---
 
----
+  ## 🛠 Tech Stack
 
-### 🛡 Security & Architecture
+  - **Blockchain:** Solana
+  - **Language:** TypeScript / JavaScript
+  - **Runtime:** Node.js ≥ 18
+  - **Package Manager:** pnpm (monorepo workspace)
+  - **Frontend:** React + Vite
+  - **Backend:** Express
 
-- **Minimal Data Retention:** ShadowNet is designed to avoid persisting sensitive session data  
-- **Session Isolation:** Sandboxed browsing reduces cross-session tracking  
-- **Relay Model:** Requests are routed through a controlled proxy layer  
-- **Transparency:** System behaviour and limitations are documented in the codebase    
-- **Session Isolation:** Sandboxed browsing prevents cross-session correlation.  
-- **Client-side Keys:** Wallet keypairs generated server-side, transmitted once over TLS, no copy retained.
+  ---
 
----
+  ## 📦 Getting Started
 
-## 🛠 Tech Stack
+  ### Prerequisites
 
-<div style="background-color:#f0f4f8; padding:10px; border-radius:6px">
+  - Node.js ≥ 18
+  - pnpm
+  - (Optional) Solana CLI for local chain interaction
+  - (Optional) Phantom or Solflare wallet
 
-- **Blockchain:** Solana  
-- **Language:** TypeScript / JavaScript  
-- **Package Manager:** pnpm  
-- **Build Tools:** TypeScript, Node.js environment  
+  ### Installation
 
-</div>
+  ```bash
+  git clone https://github.com/ShadowNetSOL/ShadowNet.git
+  cd ShadowNet
+  pnpm install
+  pnpm run dev
+  ```
 
----
-## 🔐 Security Model
+  The dev server prints the local URL (typically `http://localhost:5173` for
+  the web app). For full local development notes, see [dev.md](./dev.md).
 
-ShadowNet includes several defensive mechanisms:
+  ---
 
-- URL validation and protocol enforcement
-- Private IP range blocking (SSRF protection)
-- Rate limiting and request throttling
-- Timeout protection for outbound requests
-- Header sanitisation and controlled response handling
+  ## 🧪 Usage
 
-See SECURITY.md for full details and limitations.
+  1. Connect a Solana wallet (or generate an anonymous one in-app)
+  2. Use **Stealth Sessions** for private browsing
+  3. Generate **anonymous wallets** and import them into Phantom/Solflare
+  4. Route traffic through the **Relay Network**
+  5. Explore the **Intel Hub** for on-chain and social intelligence
 
-## 📦 Getting Started
+  ---
 
-<div style="background-color:#e8f5e9; padding:10px; border-radius:6px">
+  ## 👥 Contributing
 
-### Prerequisites
+  Contributions are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) for the
+  workflow, review expectations, and areas that require extra scrutiny
+  (wallet, key handling, relay logic).
 
-- Node.js ≥ 18  
-- pnpm package manager  
-- Solana CLI (optional for local dev)  
-- Phantom or Solflare wallet (if applicable)
+  For security issues, **do not open a public issue** — follow the disclosure
+  process in [SECURITY.md](./SECURITY.md).
 
-### Installation
+  This project follows the [Contributor Covenant Code of Conduct](./CODE_OF_CONDUCT.md).
 
-```bash
-git clone https://github.com/ShadowNetSOL/ShadowNet.git
-cd ShadowNet
-pnpm install
-pnpm run dev
-Open http://localhost:3000 to view the dApp locally.
-</div>
-🧪 Usage
-<div style="background-color:#fff3e0; padding:10px; border-radius:6px">
-Connect your Solana wallet
-	•	Use Stealth Sessions for private browsing
-	•	Generate anonymous wallets and import them into Phantom
-	•	Route traffic via Relay Network nodes
-	•	Explore Intel Hub for on-chain and social intelligence
-</div>
-👥 Contributing
-<div style="background-color:#ede7f6; padding:10px; border-radius:6px">
-We welcome contributions!
-	1.	Fork the repository
-	2.	Create a feature branch (git checkout -b feature/YourFeature)
-	3.	Commit your changes
-	4.	Push to your fork
-	5.	Open a Pull Request
-Include tests or documentation updates for new features.
-</div>
-📄 License
-<div style="background-color:#fbe9e7; padding:10px; border-radius:6px">
-ShadowNet is licensed under the MIT License — see the LICENSE file.
-</div>
-📫 Contact
-<div style="background-color:#e3f2fd; padding:10px; border-radius:6px">
-ShadowNetSOL
-	•	GitHub: https://github.com/ShadowNetSOL
-	•	Live Site: https://app-shadownet.net
-</div>
+  ---
+
+  ## 📚 Documentation Index
+
+  | File | Purpose |
+  | --- | --- |
+  | [ARCHITECTURE.md](./ARCHITECTURE.md) | System architecture overview |
+  | [RELAY.md](./RELAY.md) | Relay network design and roadmap |
+  | [SECURITY.md](./SECURITY.md) | Security model, threat model, and limits |
+  | [THREAT_MODEL.md](./THREAT_MODEL.md) | What ShadowNet does and does **not** protect against |
+  | [STATUS.md](./STATUS.md) | Current system status |
+  | [CHANGELOG.md](./CHANGELOG.md) | Release history |
+  | [CONTRIBUTING.md](./CONTRIBUTING.md) | How to contribute |
+  | [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) | Community guidelines |
+  | [dev.md](./dev.md) | Local development notes |
+
+  ---
+
+  ## 📄 License
+
+  ShadowNet is released under the [MIT License](./LICENSE).
+
+  ## 📫 Contact
+
+  - **GitHub:** [ShadowNetSOL](https://github.com/ShadowNetSOL)
+  - **Live site:** [app-shadownet.net](https://app-shadownet.net)
+  
