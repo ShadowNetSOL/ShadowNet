@@ -143,8 +143,16 @@ export default function RelayPage() {
                       </span>
                     </td>
                     <td className="p-4 flex gap-2">
-                      {node.audited && <ShieldCheck className="w-4 h-4 text-primary" title="Audited" />}
-                      {node.noLogs && <EyeOff className="w-4 h-4 text-secondary" title="No Logs Verified" />}
+                      {node.audited && (
+                        <span title="Audited" className="inline-flex">
+                          <ShieldCheck className="w-4 h-4 text-primary" aria-label="Audited" />
+                        </span>
+                      )}
+                      {node.noLogs && (
+                        <span title="No Logs Verified" className="inline-flex">
+                          <EyeOff className="w-4 h-4 text-secondary" aria-label="No Logs Verified" />
+                        </span>
+                      )}
                     </td>
                     <td className="p-4 text-right">
                       {activeConnection === node.id ? (

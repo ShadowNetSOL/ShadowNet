@@ -237,9 +237,9 @@ export default function AppSessions() {
                                 <p className="text-xs font-mono text-white/80">{node.name} · <span className="text-white/30 text-[10px]">{node.country}</span></p>
                                 <div className="flex gap-2 mt-0.5 text-[9px] font-mono text-white/30">
                                   <span>Uptime <span className="text-green-400">{node.uptime}</span></span>
-                                  <span>Load <span className="text-white/50">{node.currentLoad}</span></span>
-                                  {node.features?.includes("audited") && <span className="text-primary">✓ Audited</span>}
-                                  {node.features?.includes("no-logs") && <span className="text-primary">✓ No-Logs</span>}
+                                  <span>Load <span className="text-white/50">{node.load}%</span></span>
+                                  {node.audited && <span className="text-primary">✓ Audited</span>}
+                                  {node.noLogs && <span className="text-primary">✓ No-Logs</span>}
                                 </div>
                               </div>
                             </div>
@@ -346,7 +346,7 @@ export default function AppSessions() {
                 {[
                   { icon: Clock, label: "Started", val: format(new Date(activeSession.startedAt), "HH:mm:ss") },
                   { icon: Wifi, label: "Status", val: activeSession.status },
-                  { icon: Globe, label: "Target", val: activeSession.targetUrl?.replace(/^https?:\/\//, "").slice(0, 18) ?? "—" },
+                  { icon: Globe, label: "Masked IP", val: activeSession.maskedIp ?? "—" },
                   { icon: Server, label: "Node", val: selectedNodeData?.name?.split(" ")[0] ?? "Shadow Alpha" },
                 ].map(({ icon: Icon, label, val }) => (
                   <div key={label} className="flex items-center gap-2">

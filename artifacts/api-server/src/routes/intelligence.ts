@@ -188,11 +188,11 @@ Return ONLY the summary text, no JSON, no quotes, no markdown.`;
 // POST /api/intelligence/wallet
 router.post("/intelligence/wallet", async (req, res) => {
   const { address } = req.body as { address?: string };
-  if (!address?.trim()) return res.status(400).json({ error: "Address required" });
+  if (!address?.trim()) return void res.status(400).json({ error: "Address required" });
 
   let pubkey: PublicKey;
   try { pubkey = new PublicKey(address.trim()); } catch {
-    return res.status(400).json({ error: "Invalid Solana address" });
+    return void res.status(400).json({ error: "Invalid Solana address" });
   }
 
   try {
@@ -333,11 +333,11 @@ async function fetchParsedBatched(signatures: string[], chunkSize = 20) {
 //   Returns { devTokens, activity, scannedTxCount }
 router.post("/intelligence/wallet/onchain", async (req, res) => {
   const { address, limit } = req.body as { address?: string; limit?: number };
-  if (!address?.trim()) return res.status(400).json({ error: "Address required" });
+  if (!address?.trim()) return void res.status(400).json({ error: "Address required" });
 
   let pubkey: PublicKey;
   try { pubkey = new PublicKey(address.trim()); } catch {
-    return res.status(400).json({ error: "Invalid Solana address" });
+    return void res.status(400).json({ error: "Invalid Solana address" });
   }
   const walletStr = pubkey.toBase58();
 
@@ -352,7 +352,7 @@ router.post("/intelligence/wallet/onchain", async (req, res) => {
   try {
     const sigs = await connection.getSignaturesForAddress(pubkey, { limit: scanLimit });
     if (sigs.length === 0) {
-      return res.json({ devTokens: [], activity: [], scannedTxCount: 0 });
+      return void res.json({ devTokens: [], activity: [], scannedTxCount: 0 });
     }
 
     const parsed = await fetchParsedBatched(sigs.map(s => s.signature));
@@ -531,7 +531,7 @@ async function getWaybackHistory(handle: string): Promise<{
     const cdxUrl = `https://web.archive.org/cdx/search/cdx?url=twitter.com/${encodeURIComponent(handle)}&output=json&fl=timestamp,statuscode&limit=1000&matchType=exact`;
     const r = await fetch(cdxUrl, { signal: AbortSignal.timeout(6000) });
     if (!r.ok) return { firstSeen: null, lastSeen: null, snapshotCount: 0, possiblePreviousNames: [] };
-    const rows: string[][] = await r.json();
+    const rows = (await r.json()) as string[][];
     // rows[0] is the header row ["timestamp","statuscode"]
     const data = rows.slice(1);
     if (data.length === 0) return { firstSeen: null, lastSeen: null, snapshotCount: 0, possiblePreviousNames: [] };
@@ -554,7 +554,7 @@ async function getWaybackHistory(handle: string): Promise<{
       const xcdx = `https://web.archive.org/cdx/search/cdx?url=x.com/${encodeURIComponent(handle)}&output=json&fl=timestamp,statuscode&limit=100&matchType=exact`;
       const xr = await fetch(xcdx, { signal: AbortSignal.timeout(4000) });
       if (xr.ok) {
-        const xrows: string[][] = await xr.json();
+        const xrows = (await xr.json()) as string[][];
         const xdata = xrows.slice(1);
         if (xdata.length > 0) {
           // Account exists on x.com/handle too — normal, but the difference in first-seen date can hint at name history
@@ -581,7 +581,7 @@ async function getWaybackHistory(handle: string): Promise<{
 // POST /api/intelligence/x-ca
 router.post("/intelligence/x-ca", async (req, res) => {
   const { username } = req.body as { username?: string };
-  if (!username?.trim()) return res.status(400).json({ error: "Username required" });
+  if (!username?.trim()) return void res.status(400).json({ error: "Username required" });
 
   const handle = username.trim().replace(/^@/, "");
 
@@ -592,7 +592,7 @@ router.post("/intelligence/x-ca", async (req, res) => {
       getWaybackHistory(handle),
     ]);
 
-    if (!html) return res.status(503).json({ error: "Could not reach Twitter mirror. Try again shortly." });
+    if (!html) return void res.status(503).json({ error: "Could not reach Twitter mirror. Try again shortly." });
 
     const $ = cheerio.load(html);
 
@@ -678,13 +678,13 @@ router.post("/intelligence/x-ca", async (req, res) => {
 // POST /api/intelligence/smart-followers
 router.post("/intelligence/smart-followers", async (req, res) => {
   const { username } = req.body as { username?: string };
-  if (!username?.trim()) return res.status(400).json({ error: "Username required" });
+  if (!username?.trim()) return void res.status(400).json({ error: "Username required" });
 
   const handle = username.trim().replace(/^@/, "");
 
   try {
     const html = await fetchNitter(`/${handle}`);
-    if (!html) return res.status(503).json({ error: "Could not reach Twitter mirror." });
+    if (!html) return void res.status(503).json({ error: "Could not reach Twitter mirror." });
 
     const $ = cheerio.load(html);
     const displayName = $(".profile-card-fullname").text().trim() || handle;
@@ -1046,18 +1046,18 @@ router.post("/intelligence/github-scan", githubScanLimiter, async (req, res) => 
   });
   try {
     const raw = String((req.body as { repo?: string })?.repo ?? "").trim();
-    if (raw.length > 300) return res.status(400).json({ error: "Input too long." });
+    if (raw.length > 300) return void res.status(400).json({ error: "Input too long." });
     const parsed = parseGithubInput(raw);
     if (!parsed) {
-      return res.status(400).json({ error: "Invalid GitHub URL or owner/repo." });
+      return void res.status(400).json({ error: "Invalid GitHub URL or owner/repo." });
     }
     const { owner, repo } = parsed;
 
     // Fetch repo metadata
     const metaResp = await ghFetch(`/repos/${owner}/${repo}`);
-    if (metaResp.status === 404) return res.status(404).json({ error: "Repository not found." });
-    if (metaResp.status === 403) return res.status(429).json({ error: "GitHub API rate limit reached. Try again later." });
-    if (!metaResp.ok) return res.status(502).json({ error: `GitHub API error (${metaResp.status}).` });
+    if (metaResp.status === 404) return void res.status(404).json({ error: "Repository not found." });
+    if (metaResp.status === 403) return void res.status(429).json({ error: "GitHub API rate limit reached. Try again later." });
+    if (!metaResp.ok) return void res.status(502).json({ error: `GitHub API error (${metaResp.status}).` });
     const meta = await metaResp.json() as GithubRepoMeta;
 
     // Parallel fetch: README, contributors, root files

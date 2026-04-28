@@ -118,3 +118,13 @@ No DB persistence for tracked wallets — privacy-first by design.
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+
+## CI / Build Notes
+
+The repo uses a remote-only GitHub Actions workflow (`.github/workflows/ci.yml` lives only on the `main` branch on GitHub) that runs `pnpm install --frozen-lockfile && pnpm run typecheck && pnpm run build` on Node 20 / pnpm 9. Three things are required for CI to stay green:
+
+1. **`pnpm.overrides` must be present in BOTH `pnpm-workspace.yaml` AND root `package.json`.** Even though pnpm 9.5+ honors `overrides:` in `pnpm-workspace.yaml`, older pnpm 9.x patches don't. `pnpm-lock.yaml` records 81 platform-binary overrides (esbuild / lightningcss / @rollup native modules / @oxide / @ngrok darwin/freebsd/linux/win32/sunos binaries, plus `esbuild@0.27.3` and `@esbuild-kit/esm-loader → tsx@^4.21.0`) — the two override blocks must stay byte-identical with the lockfile or `--frozen-lockfile` will reject install with "overrides configuration doesn't match lockfile."
+
+2. **Express handlers in `artifacts/api-server` use `return void res.status(N).json(...)` / `return void res.json(...)`** so every code path returns `undefined` and the handler signature stays consistent under `noImplicitReturns` (TS7030). Don't reintroduce `return res.status(N).json(...)` — the bare `return res.json` form makes one branch return `Response` while success paths return `void`, and TS errors out.
+
+3. **Vite configs (`artifacts/shadownet/vite.config.ts`, `artifacts/mockup-sandbox/vite.config.ts`) gate the `PORT` / `BASE_PATH` requirement on `process.argv.includes("build")`.** `vite build` produces static assets and doesn't need a port; CI compile-checks would otherwise fail because they don't set those env vars. Dev/preview still requires both strictly. Production deploys on Replit infrastructure inject the correct `BASE_PATH` per artifact, so the `'/'` build-time default only applies to CI compile-checks (whose output is never deployed).
