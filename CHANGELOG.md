@@ -18,10 +18,22 @@
   - Issue and pull request templates under `.github/`
 
   ### Changed
+  - **Wallet generation moved entirely to the browser.** Removed the
+    server-side `POST /api/wallet/generate` endpoint and replaced it with a
+    pure client-side implementation using `@scure/bip39`, `@noble/ed25519`,
+    and SLIP-0010 hardened derivation. The server no longer has any code
+    path that sees a mnemonic, seed, or private key. Phantom-compatibility
+    is verified against `@solana/web3.js`.
   - README.md rewritten for clarity, broken markdown fixed, contradictions
-    removed (relay nodes are no longer described as "audited"), wallet section
-    reframed to emphasize user responsibility for key handling, and broken
-    `RELAYS.md` link corrected to `RELAY.md`
+    removed (relay nodes are no longer described as "audited"), wallet
+    section reframed to emphasize the new browser-only generation model,
+    and broken `RELAYS.md` link corrected to `RELAY.md`
+  - SECURITY.md updated to reflect that wallet generation is client-side
+  - THREAT_MODEL.md updated to reflect that wallet keys never leave the browser
+
+  ### Removed
+  - Server-side wallet generation endpoint (`POST /api/wallet/generate`)
+  - `bip39`, `ed25519-hd-key`, and `bs58` dependencies from the API server
 
   ## [0.1.0] - 2026-04-28
 
