@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Wallet, Users, Copy, Check, ExternalLink, AlertTriangle, ChevronRight, Activity, Zap, Star, Clock } from "lucide-react";
+import { Search, Wallet, Users, Copy, Check, ExternalLink, AlertTriangle, ChevronRight, Activity, Zap, Star, Clock, Github, Shield, ShieldAlert, ShieldCheck, ThumbsUp, ThumbsDown, Code2, GitFork, Scale, FileText } from "lucide-react";
 
 const XLogo = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -42,6 +42,38 @@ interface CAResult {
     possiblePreviousNames: string[];
     note: string;
   } | null;
+}
+
+interface GithubScanResult {
+  owner: string;
+  repo: string;
+  fullName: string;
+  description: string | null;
+  stars: number;
+  forks: number;
+  openIssues: number;
+  language: string | null;
+  license: string | null;
+  createdAt: string;
+  pushedAt: string;
+  ageDays: number;
+  daysSincePush: number;
+  contributors: number;
+  isFork: boolean;
+  isArchived: boolean;
+  topics: string[];
+  hasReadme: boolean;
+  depCount: number | null;
+  devDepCount: number | null;
+  fileCount: number;
+  htmlUrl: string;
+  trustScore: number;
+  riskLevel: "LOW" | "MEDIUM" | "HIGH";
+  summary: string;
+  codeOverview: string;
+  pros: string[];
+  cons: string[];
+  risks: string[];
 }
 
 interface SmartFollowersResult {
@@ -553,14 +585,246 @@ function SmartFollowers() {
   );
 }
 
+// ─── GitHub Scanner ──────────────────────────────────────────────────────────
+
+function GithubScanner() {
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<GithubScanResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const scan = async () => {
+    if (!input.trim()) return;
+    setLoading(true); setError(null); setResult(null);
+    try { setResult(await callApi<GithubScanResult>("intelligence/github-scan", { repo: input.trim() })); }
+    catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    finally { setLoading(false); }
+  };
+
+  const riskMeta = (level: "LOW" | "MEDIUM" | "HIGH") => {
+    switch (level) {
+      case "LOW":    return { color: "#39FF14", Icon: ShieldCheck, label: "LOW RISK",    bg: "bg-primary/8", border: "border-primary/25" };
+      case "MEDIUM": return { color: "#f59e0b", Icon: Shield,      label: "MEDIUM RISK", bg: "bg-amber-500/8", border: "border-amber-500/25" };
+      case "HIGH":   return { color: "#ef4444", Icon: ShieldAlert, label: "HIGH RISK",   bg: "bg-red-500/8", border: "border-red-500/25" };
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-base font-mono font-bold text-white mb-1">GitHub Repo Scanner</h2>
+        <p className="text-xs font-mono text-white/35">Analyze any public repo for trust score, code overview, and security risks.</p>
+      </div>
+
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Github className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25" />
+          <input value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && scan()}
+            placeholder="owner/repo or github.com/owner/repo"
+            className="w-full bg-black border border-white/10 rounded-lg pl-10 pr-4 py-3 text-sm font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-colors" />
+        </div>
+        <button onClick={scan} disabled={loading || !input.trim()}
+          className="px-4 py-3 bg-primary text-black font-mono font-bold text-xs rounded-lg hover:bg-white transition-colors disabled:opacity-40">
+          {loading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}><Search className="w-4 h-4" /></motion.div> : <Search className="w-4 h-4" />}
+        </button>
+      </div>
+
+      {loading && (
+        <div className="p-4 rounded-lg border border-primary/15 bg-primary/[0.03] flex items-center gap-3">
+          <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}>
+            <Activity className="w-4 h-4 text-primary" />
+          </motion.div>
+          <p className="text-xs font-mono text-primary/80">Fetching repo & running AI analysis…</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 rounded-lg border border-red-500/20 bg-red-500/5 flex gap-3">
+          <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+          <p className="text-xs font-mono text-red-400">{error}</p>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {result && (() => {
+          const risk = riskMeta(result.riskLevel);
+          return (
+            <motion.div key={result.fullName} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+              {/* Header card */}
+              <div className="p-5 rounded-xl border border-white/8 bg-white/[0.02]">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Github className="w-3.5 h-3.5 text-white/40 shrink-0" />
+                      <a href={result.htmlUrl} target="_blank" rel="noopener noreferrer"
+                        className="text-sm font-mono font-bold text-white hover:text-primary transition-colors truncate flex items-center gap-1.5 group">
+                        {result.fullName}
+                        <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </a>
+                    </div>
+                    {result.description && (
+                      <p className="text-xs font-mono text-white/45 line-clamp-2">{result.description}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                      {result.isArchived && (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-[9px] font-mono text-amber-400">ARCHIVED</span>
+                      )}
+                      {result.isFork && (
+                        <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] font-mono text-white/50">FORK</span>
+                      )}
+                      {result.language && (
+                        <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-[9px] font-mono text-purple-300">{result.language}</span>
+                      )}
+                      {result.license && (
+                        <span className="px-1.5 py-0.5 rounded bg-primary/8 border border-primary/20 text-[9px] font-mono text-primary">{result.license}</span>
+                      )}
+                    </div>
+                  </div>
+                  <ScoreRing score={result.trustScore} />
+                </div>
+
+                {/* Risk badge */}
+                <div className={`flex items-center gap-2 p-2.5 rounded-lg border ${risk.border} ${risk.bg}`}>
+                  <risk.Icon className="w-4 h-4 shrink-0" style={{ color: risk.color }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-mono tracking-widest" style={{ color: risk.color }}>{risk.label}</p>
+                    <p className="text-xs font-mono text-white/70 mt-0.5">{result.summary}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats grid */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: "STARS", value: fmtNum(result.stars), icon: Star },
+                  { label: "FORKS", value: fmtNum(result.forks), icon: GitFork },
+                  { label: "CONTRIBUTORS", value: fmtNum(result.contributors), icon: Users },
+                  { label: "OPEN ISSUES", value: fmtNum(result.openIssues), icon: AlertTriangle },
+                ].map(s => (
+                  <div key={s.label} className="p-3 rounded-lg border border-white/6 bg-black/40">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <s.icon className="w-3 h-3 text-white/30" />
+                      <p className="text-[9px] font-mono text-white/30 tracking-widest">{s.label}</p>
+                    </div>
+                    <p className="text-sm font-mono font-bold text-white">{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Activity */}
+              <div className="flex gap-3">
+                <div className="flex-1 p-3 rounded-lg border border-white/6 bg-black/30">
+                  <p className="text-[9px] font-mono text-white/25 uppercase mb-1">Created</p>
+                  <p className="text-xs font-mono text-white/60">{timeAgo(result.createdAt)}</p>
+                </div>
+                <div className="flex-1 p-3 rounded-lg border border-white/6 bg-black/30">
+                  <p className="text-[9px] font-mono text-white/25 uppercase mb-1">Last Push</p>
+                  <p className={`text-xs font-mono ${result.daysSincePush > 365 ? "text-amber-400" : "text-primary"}`}>{timeAgo(result.pushedAt)}</p>
+                </div>
+              </div>
+
+              {/* Code Overview */}
+              {result.codeOverview && (
+                <div className="p-4 rounded-xl border border-white/8 bg-white/[0.02]">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Code2 className="w-3.5 h-3.5 text-purple-400" />
+                    <p className="text-[10px] font-mono text-white/40 tracking-widest">CODE OVERVIEW</p>
+                  </div>
+                  <p className="text-xs font-mono text-white/70 leading-relaxed">{result.codeOverview}</p>
+                </div>
+              )}
+
+              {/* Pros */}
+              {result.pros.length > 0 && (
+                <div className="p-4 rounded-xl border border-primary/20 bg-primary/[0.04]">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ThumbsUp className="w-3.5 h-3.5 text-primary" />
+                    <p className="text-[10px] font-mono text-primary tracking-widest">WHAT'S GOOD</p>
+                  </div>
+                  <ul className="space-y-2">
+                    {result.pros.map((p, i) => (
+                      <li key={i} className="flex gap-2 text-xs font-mono text-white/70 leading-relaxed">
+                        <Check className="w-3 h-3 text-primary shrink-0 mt-0.5" />
+                        <span>{p}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Cons */}
+              {result.cons.length > 0 && (
+                <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.04]">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ThumbsDown className="w-3.5 h-3.5 text-amber-400" />
+                    <p className="text-[10px] font-mono text-amber-400 tracking-widest">WHAT'S WEAK</p>
+                  </div>
+                  <ul className="space-y-2">
+                    {result.cons.map((c, i) => (
+                      <li key={i} className="flex gap-2 text-xs font-mono text-white/70 leading-relaxed">
+                        <ChevronRight className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                        <span>{c}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Risks */}
+              {result.risks.length > 0 && (
+                <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/[0.04]">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                    <p className="text-[10px] font-mono text-red-400 tracking-widest">SECURITY RISKS</p>
+                  </div>
+                  <ul className="space-y-2">
+                    {result.risks.map((r, i) => (
+                      <li key={i} className="flex gap-2 text-xs font-mono text-white/70 leading-relaxed">
+                        <AlertTriangle className="w-3 h-3 text-red-400 shrink-0 mt-0.5" />
+                        <span>{r}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Repo facts footer */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-2 p-2.5 rounded-lg border border-white/6 bg-black/30">
+                  <FileText className="w-3 h-3 text-white/30" />
+                  <p className="text-[10px] font-mono text-white/40">{result.fileCount} root files</p>
+                </div>
+                <div className="flex items-center gap-2 p-2.5 rounded-lg border border-white/6 bg-black/30">
+                  <Scale className="w-3 h-3 text-white/30" />
+                  <p className="text-[10px] font-mono text-white/40">{result.license ?? "No license"}</p>
+                </div>
+                {result.depCount !== null && (
+                  <div className="flex items-center gap-2 p-2.5 rounded-lg border border-white/6 bg-black/30 col-span-2">
+                    <Code2 className="w-3 h-3 text-white/30" />
+                    <p className="text-[10px] font-mono text-white/40">{result.depCount} runtime + {result.devDepCount} dev dependencies</p>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-[9px] font-mono text-white/20 text-center">AI-assisted analysis. Always verify critical findings independently.</p>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ─── Main Intel Hub ───────────────────────────────────────────────────────────
 
-type IntelTab = "wallet" | "xca" | "followers";
+type IntelTab = "wallet" | "xca" | "followers" | "github";
 
 const tabs: Array<{ id: IntelTab; label: string; icon: React.ElementType; shortLabel: string }> = [
-  { id: "wallet", label: "Wallet Analyzer", icon: Wallet, shortLabel: "WALLET" },
-  { id: "xca", label: "X CA Checker", icon: XLogo, shortLabel: "CA CHECK" },
-  { id: "followers", label: "Smart Followers", icon: Users, shortLabel: "FOLLOWERS" },
+  { id: "wallet",    label: "Wallet Analyzer", icon: Wallet, shortLabel: "WALLET" },
+  { id: "xca",       label: "X CA Checker",    icon: XLogo,  shortLabel: "CA" },
+  { id: "followers", label: "Smart Followers", icon: Users,  shortLabel: "FOLLOW" },
+  { id: "github",    label: "GitHub Scanner",  icon: Github, shortLabel: "GITHUB" },
 ];
 
 export default function IntelHub() {
@@ -574,7 +838,7 @@ export default function IntelHub() {
           INTELLIGENCE SUITE
         </div>
         <h1 className="text-xl font-mono font-bold text-white mb-1">Intel</h1>
-        <p className="text-xs font-mono text-white/35">On-chain wallet analysis, X account CA history, and smart follower detection.</p>
+        <p className="text-xs font-mono text-white/35">On-chain wallet analysis, X account intel, smart follower detection, and GitHub repo trust scanning.</p>
       </div>
 
       {/* Sub-tabs */}
@@ -591,9 +855,10 @@ export default function IntelHub() {
       {/* Tool content */}
       <AnimatePresence mode="wait">
         <motion.div key={tab} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.2 }}>
-          {tab === "wallet" && <WalletAnalyzer />}
-          {tab === "xca" && <XCAChecker />}
+          {tab === "wallet"    && <WalletAnalyzer />}
+          {tab === "xca"       && <XCAChecker />}
           {tab === "followers" && <SmartFollowers />}
+          {tab === "github"    && <GithubScanner />}
         </motion.div>
       </AnimatePresence>
 
