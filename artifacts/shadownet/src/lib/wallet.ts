@@ -6,12 +6,25 @@ import { sha512 } from "@noble/hashes/sha2";
 import * as ed from "@noble/ed25519";
 import bs58 from "bs58";
 
+export interface GenerationProvenance {
+  generatedClientSide: true;
+  secureContext: boolean;
+  entropySource: "crypto.getRandomValues";
+  rngBits: 128;
+  curve: "ed25519";
+  derivationStandard: "SLIP-0010";
+  mnemonicStandard: "BIP-39 (English, 12 words)";
+  libraries: ReadonlyArray<string>;
+  memoryWipedBestEffort: true;
+}
+
 export interface GeneratedWallet {
   publicKey: string;
   privateKey: string;
   mnemonic: string;
   derivationPath: string;
   createdAt: string;
+  provenance: GenerationProvenance;
 }
 
 const ED25519_CURVE_KEY = new TextEncoder().encode("ed25519 seed");
@@ -22,9 +35,21 @@ interface DerivedKey {
   chainCode: Uint8Array;
 }
 
+function wipe(...arrays: Array<Uint8Array | null | undefined>): void {
+  for (const a of arrays) {
+    if (a && typeof a.fill === "function") {
+      try { a.fill(0); } catch { /* ignore wipe errors */ }
+    }
+  }
+}
+
 function masterKeyFromSeed(seed: Uint8Array): DerivedKey {
   const I = hmac(sha512, ED25519_CURVE_KEY, seed);
-  return { key: I.slice(0, 32), chainCode: I.slice(32) };
+  const key = I.slice(0, 32);
+  const chainCode = I.slice(32);
+  // Wipe the source HMAC buffer; the slices are independent copies.
+  wipe(I);
+  return { key, chainCode };
 }
 
 function ckdPriv(parent: DerivedKey, index: number): DerivedKey {
@@ -35,7 +60,11 @@ function ckdPriv(parent: DerivedKey, index: number): DerivedKey {
   data.set(parent.key, 1);
   data.set(indexBytes, 33);
   const I = hmac(sha512, parent.chainCode, data);
-  return { key: I.slice(0, 32), chainCode: I.slice(32) };
+  const key = I.slice(0, 32);
+  const chainCode = I.slice(32);
+  // Wipe intermediate buffers that briefly held key material.
+  wipe(data, indexBytes, I);
+  return { key, chainCode };
 }
 
 function deriveSlip10Path(path: string, seed: Uint8Array): DerivedKey {
@@ -49,29 +78,93 @@ function deriveSlip10Path(path: string, seed: Uint8Array): DerivedKey {
     if (!Number.isInteger(idx) || idx < 0) {
       throw new Error(`Invalid path segment: ${segment}`);
     }
-    key = ckdPriv(key, idx + HARDENED_OFFSET);
+    const next = ckdPriv(key, idx + HARDENED_OFFSET);
+    // Wipe the previous level's key + chain code now that we've descended past it.
+    wipe(key.key, key.chainCode);
+    key = next;
   }
   return key;
 }
 
+/**
+ * Defense-in-depth pre-flight checks. Refuse to generate keys if the runtime
+ * cannot supply OS-grade entropy or is not in a secure context.
+ */
+function assertSecureRuntime(): { secureContext: boolean } {
+  if (typeof crypto === "undefined" || typeof crypto.getRandomValues !== "function") {
+    throw new Error(
+      "WebCrypto getRandomValues is unavailable. Refusing to generate keys without an OS-grade RNG."
+    );
+  }
+  // Smoke-test the RNG actually produces non-zero output.
+  const probe = new Uint8Array(32);
+  crypto.getRandomValues(probe);
+  if (probe.every(b => b === 0)) {
+    throw new Error("RNG returned all zeros. Refusing to generate keys.");
+  }
+  wipe(probe);
+
+  // Browser-only: require HTTPS or localhost. In non-browser runtimes we skip this.
+  const inBrowser = typeof window !== "undefined";
+  const secureContext = inBrowser ? window.isSecureContext === true : true;
+  if (inBrowser && !secureContext) {
+    throw new Error(
+      "Secure context required (HTTPS or localhost). Refusing to generate keys over plain HTTP."
+    );
+  }
+  return { secureContext };
+}
+
 export async function generateAnonymousWallet(): Promise<GeneratedWallet> {
+  const { secureContext } = assertSecureRuntime();
+
   const mnemonic = generateMnemonic(wordlist, 128);
-  const seed = await mnemonicToSeed(mnemonic);
-  const derivationPath = "m/44'/501'/0'/0'";
-  const { key } = deriveSlip10Path(derivationPath, seed);
+  let seed: Uint8Array | null = null;
+  let derived: DerivedKey | null = null;
+  let secretKey: Uint8Array | null = null;
 
-  const publicKey = await ed.getPublicKeyAsync(key);
-  const secretKey = new Uint8Array(64);
-  secretKey.set(key, 0);
-  secretKey.set(publicKey, 32);
+  try {
+    seed = await mnemonicToSeed(mnemonic);
+    const derivationPath = "m/44'/501'/0'/0'";
+    derived = deriveSlip10Path(derivationPath, seed);
 
-  return {
-    publicKey: bs58.encode(publicKey),
-    privateKey: bs58.encode(secretKey),
-    mnemonic,
-    derivationPath,
-    createdAt: new Date().toISOString(),
-  };
+    const publicKey = await ed.getPublicKeyAsync(derived.key);
+    secretKey = new Uint8Array(64);
+    secretKey.set(derived.key, 0);
+    secretKey.set(publicKey, 32);
+
+    const wallet: GeneratedWallet = {
+      publicKey: bs58.encode(publicKey),
+      privateKey: bs58.encode(secretKey),
+      mnemonic,
+      derivationPath,
+      createdAt: new Date().toISOString(),
+      provenance: {
+        generatedClientSide: true,
+        secureContext,
+        entropySource: "crypto.getRandomValues",
+        rngBits: 128,
+        curve: "ed25519",
+        derivationStandard: "SLIP-0010",
+        mnemonicStandard: "BIP-39 (English, 12 words)",
+        libraries: [
+          "@scure/bip39 (audited)",
+          "@noble/hashes (audited)",
+          "@noble/ed25519 (audited)",
+          "bs58",
+        ],
+        memoryWipedBestEffort: true,
+      },
+    };
+
+    return wallet;
+  } finally {
+    // Best-effort: clear all sensitive intermediate buffers from JS memory.
+    // Note: the returned `mnemonic` and `privateKey` strings remain in the React
+    // tree until the user navigates away; that exposure is unavoidable in JS.
+    wipe(seed, secretKey);
+    if (derived) wipe(derived.key, derived.chainCode);
+  }
 }
 
 export function useGenerateWallet(): UseMutationResult<GeneratedWallet, Error, void> {

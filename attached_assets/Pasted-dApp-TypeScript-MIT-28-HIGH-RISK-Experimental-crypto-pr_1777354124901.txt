@@ -1,0 +1,41 @@
+dApp
+TypeScript
+MIT
+28
+HIGH RISK
+Experimental crypto/privacy project with very low adoption and strong security-sensitive claims around anonymous wallets and relays. The repo presents some governance/security docs, but its youth, limited reputation, and handling of private keys make it high-risk to use with real funds.
+STARS
+1
+FORKS
+0
+CONTRIBUTORS
+4
+OPEN ISSUES
+1
+CREATED
+1mo ago
+LAST PUSH
+recently
+CODE OVERVIEW
+This TypeScript repository appears to be a Solana-focused privacy dApp that combines browser-based wallet generation, relay-based traffic routing, and session privacy features. It also mentions wallet analytics and contract-address intelligence tooling. In plain terms, it aims to let users browse or interact with Solana apps with reduced tracking while creating disposable wallets locally in the browser.
+WHAT'S GOOD
+MIT licensed and not archived or disabled
+Recently active, with last push today
+Includes SECURITY, THREAT_MODEL, STATUS, and architecture docs
+README explicitly says the project is experimental and not audited
+Small dependency surface in package.json
+Contributors count is better than a solo throwaway repo
+WHAT'S WEAK
+Only 1 star and 0 forks; essentially no public trust signal
+Very new repo (42 days), so maturity is low
+Handles wallet generation and seed material in a browser context
+Markets privacy/anonymity features that are difficult to verify
+Relay infrastructure is described as unfinished and not independently audited
+Crypto-focused project with operational security implications for users
+SECURITY RISKS
+Browser-generated wallet flows can expose mnemonics if frontend code, hosting, or dependencies are compromised
+Relay operators may log IPs, metadata, destinations, or timing data despite privacy claims
+Experimental privacy tooling may give users a false sense of anonymity
+If users import generated keys into wallets, compromise could lead to direct fund theft
+Low adoption and young age mean fewer eyes reviewing code for backdoors or mistakes
+Public fallback relay services increase third-party trust and surveillance exposure

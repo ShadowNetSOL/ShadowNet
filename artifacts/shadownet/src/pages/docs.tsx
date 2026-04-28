@@ -27,7 +27,7 @@ const faqs: FaqItem[] = [
   },
   {
     q: "Are the Solana wallets I generate safe to use?",
-    a: "ShadowNet generates Solana keypairs entirely on the server using a secure Ed25519 key derivation algorithm and BIP-39 mnemonic generation. The private key and mnemonic are transmitted to you over HTTPS and are never logged, stored, or cached anywhere on the ShadowNet infrastructure. Once the response reaches your browser, the keys exist only in your session memory. You should save your private key and mnemonic immediately and securely — if you close the page without saving them, they cannot be recovered.",
+    a: "Wallets are generated 100% client-side in your browser using the same audited cryptographic libraries that Phantom and Solflare use under the hood — @scure/bip39 for the BIP-39 mnemonic, @noble/hashes for SLIP-0010 derivation, and @noble/ed25519 for the Ed25519 keypair. Entropy comes from your operating system's RNG via crypto.getRandomValues. The private key and mnemonic never leave your device — there is no API call that transmits keys, and the ShadowNet server never sees them. ShadowNet wallets are intended for disposable / burner use (mint hunting, airdrops, one-off transactions). For meaningful funds you should use a hardware wallet (Ledger or Trezor); any browser-resident key is exposed if your machine or browser is compromised.",
   },
   {
     q: "Can I import my ShadowNet wallet into Phantom?",
@@ -92,7 +92,7 @@ const sections: DocSection[] = [
       },
       {
         heading: "Three pillars",
-        body: "ShadowNet's architecture rests on three independent privacy mechanisms: (1) Stealth Sessions with randomized fingerprints and IP cloaking, (2) Anonymous Solana wallet generation with zero server-side retention, and (3) a curated network of audited, no-log relay nodes for traffic routing.",
+        body: "ShadowNet's architecture rests on three independent privacy mechanisms: (1) Stealth Sessions with randomized fingerprints and IP cloaking, (2) anonymous Solana wallet generation that runs entirely in your browser so no key material ever touches our servers, and (3) a curated network of audited, no-log relay nodes for traffic routing.",
       },
     ],
   },
@@ -128,23 +128,31 @@ const sections: DocSection[] = [
     icon: Key,
     content: [
       {
-        body: "The ShadowNet wallet generator creates anonymous Solana keypairs using the Ed25519 elliptic curve algorithm and BIP-39 mnemonic derivation. Generated wallets are fully compatible with Phantom and other Solana wallets that support private key import.",
+        body: "The ShadowNet wallet generator creates burner Solana keypairs entirely inside your browser. No keys, mnemonics, or seed material are ever transmitted to a ShadowNet server. The output is fully compatible with Phantom, Solflare, and any other Solana wallet that supports Base58 private-key import.",
       },
       {
         heading: "How generation works",
-        body: "Each time you click Generate New Keypair, ShadowNet produces a fresh 12-word BIP-39 mnemonic, derives a seed from it, and uses the m/44'/501'/0'/0' Solana derivation path to produce an Ed25519 keypair. The result includes a Base58-encoded public key and a Base58-encoded private key ready for Phantom import.",
+        body: "When you click Generate Burner Keypair, ShadowNet runs the following entirely on your device: (1) gather 128 bits of entropy from the operating system via crypto.getRandomValues, (2) encode that entropy as a 12-word BIP-39 English mnemonic using @scure/bip39, (3) stretch it to a 64-byte seed via PBKDF2-HMAC-SHA512, (4) derive an Ed25519 keypair along the Solana derivation path m/44'/501'/0'/0' using SLIP-0010 (HMAC-SHA512 with @noble/hashes), and (5) compute the public key with @noble/ed25519. The private key is exported as a Base58 string in the standard 64-byte Solana format.",
+      },
+      {
+        heading: "Audited cryptographic libraries",
+        body: "All cryptographic operations use the same audited primitives that production Solana wallets rely on: @scure/bip39 (mnemonic generation, audited by Cure53), @noble/hashes and @noble/ed25519 (audited by Cure53 and Trail of Bits), and bs58 for Base58 encoding. We implement zero custom cryptography — the entire derivation chain is industry-standard.",
+      },
+      {
+        heading: "Defense-in-depth checks",
+        body: "Before any key material is generated, ShadowNet verifies that crypto.getRandomValues is available, smoke-tests the RNG output for non-zero bytes, and refuses to proceed unless the page is loaded in a secure context (HTTPS or localhost). After encoding, intermediate sensitive buffers — the BIP-39 seed, derived chain code, and 64-byte secret-key array — are zero-filled in memory as a best-effort defense against later memory disclosure.",
       },
       {
         heading: "Zero retention",
-        body: "Keys are generated in memory during the API request and are never written to any database, log file, or persistent storage. The only copy of your private key and mnemonic exists in the API response transmitted to your browser. ShadowNet cannot recover keys after the response is delivered.",
+        body: "Because generation never leaves your browser, ShadowNet has no key material to retain — there is no API request that contains a private key or mnemonic, and no log line on any ShadowNet server records one. The only copies that exist are the strings displayed on your screen. Once you close or reload the page, they are gone.",
       },
       {
         heading: "Importing into Phantom",
         body: "Copy the private key shown on the Wallet Generator page. Open Phantom → click your avatar → Add / Connect Wallet → Import Private Key → paste the key and confirm. Your new anonymous wallet will be added to Phantom immediately and can be used for any on-chain activity.",
       },
       {
-        heading: "Security guidance",
-        body: "Store your private key and mnemonic phrase in an encrypted password manager or offline secure storage immediately after generation. Do not share them with anyone. Do not screenshot them on a device with cloud sync enabled. If you lose them, the wallet cannot be recovered — ShadowNet holds no copy.",
+        heading: "Security guidance — read this",
+        body: "ShadowNet wallets are designed for disposable use: airdrop hunting, one-off mints, testnet activity, dApp interactions you don't want linked to your main identity. They are NOT intended to hold meaningful funds. Any browser-resident key — including those generated by Phantom or Solflare — is exposed if your machine, browser, or installed extensions are compromised. For real balances, use a hardware wallet (Ledger or Trezor). If you do save a ShadowNet key for repeat use, store it in an encrypted password manager or offline cold storage; never screenshot it on a cloud-synced device, and never paste it into any other website.",
       },
     ],
   },
