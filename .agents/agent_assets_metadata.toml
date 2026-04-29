@@ -6,3 +6,27 @@ id = "ynQYXTmgqxRBIleLfXulJ"
 uri = "file://exports/shadownet-source.tar.gz"
 type = "unspecified"
 title = "ShadowNet Source (with latest fixes)"
+
+[[outputs]]
+id = "996YIrvEpX-DM0dlZ9sMp"
+uri = "file://exports/shadownet-session-changes.tar.gz"
+type = "unspecified"
+title = "All session changes (tarball, includes the updated github-trust.ts)"
+
+[[outputs]]
+id = "UslrRUt1fEQSdlxvfvKF8"
+uri = "file://exports/scam-detection-fix.patch.txt"
+type = "text"
+title = "scam-detection-fix.patch (rename to .patch and apply with `git apply`)"
+
+[[outputs]]
+id = "lUTdHc2VeUJBBSGb1ZwI9"
+uri = "file://exports/scam-detection-fix.tar.gz"
+type = "unspecified"
+title = "scam-detection-fix.tar.gz — drop-in file + patch + README"
+
+[[outputs]]
+id = "azXl_HqJLceIHASf7ogQ5"
+uri = "file://exports/shadownet-session-changes-bundle.tar.gz"
+type = "unspecified"
+title = "shadownet-session-changes-bundle.tar.gz — ALL intel-feature changes from this session"

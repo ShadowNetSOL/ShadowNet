@@ -47,10 +47,57 @@ interface ActivityEvent {
   valueUsd: number | null;
 }
 
+interface PnlSummaryUi {
+  realizedUsd: number;
+  unrealizedUsd: number;
+  totalBoughtUsd: number;
+  totalSoldUsd: number;
+  closedPositions: number;
+  winningPositions: number;
+  losingPositions: number;
+  winRate: number; // 0-100 integer
+  bestTokenMint: string | null;
+  bestTokenSymbol: string | null;
+  bestTokenRealizedUsd: number | null;
+}
+
+interface ArchetypeUi {
+  type: "SNIPER" | "AIRDROP_FARMER" | "LIQUIDITY_PROVIDER" | "SMART_MONEY" | "BAG_HOLDER" | "ACTIVE_TRADER" | "DORMANT" | "NORMAL";
+  label: string;
+  description: string;
+  confidence: number;
+  signals: string[];
+}
+
+interface CopyTradeUi {
+  tracked: number;
+  winners: number;
+  moonshots: number;
+  winRate: number;
+  message: string;
+}
+
+interface ScoreSnapshot { ts: number; score: number }
+
+interface CrossSignalUi {
+  mint: string;
+  symbol?: string;
+  verdict: "SAME_ENTITY_LIKELY" | "CONVERGENT_INTEREST" | "ISOLATED";
+  reason: string;
+  sources: { wallets: string[]; repos: string[]; x: string[] };
+  sourceTypeCount: number;
+}
+
 interface OnchainResult {
   devTokens: DevToken[];
   activity: ActivityEvent[];
   scannedTxCount: number;
+  pnl?: PnlSummaryUi;
+  archetype?: ArchetypeUi;
+  copyTrade?: CopyTradeUi | null;
+  onchainScore?: number;
+  scoreHistory?: ScoreSnapshot[];
+  crossSignals?: CrossSignalUi[];
 }
 
 interface TrackedWallet {
@@ -122,6 +169,59 @@ function useTrackedList(): TrackedWallet[] {
   return list;
 }
 
+interface OwnerProfileUi {
+  login: string;
+  type: "User" | "Organization";
+  createdAt: string | null;
+  ageDays: number | null;
+  publicRepos: number;
+  followers: number;
+}
+
+interface ScamHitUi {
+  id: string;
+  label: string;
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  evidence: string;
+}
+
+interface ScamPatternsUi {
+  matched: string[];
+  drainerSignatures: string[];
+  obfuscationDetected: boolean;
+  riskScore: number;
+  verdict?: "LIKELY_MALICIOUS" | "SUSPICIOUS" | "LOW_CONCERN" | "CLEAN";
+  confidence?: number;
+  hits?: ScamHitUi[];
+}
+
+interface AntiGamingUi {
+  starsPerDay: number;
+  starsSpike: boolean;
+  commitConsistency: number;
+  burstyCommits: boolean;
+  ownerYoungAccount: boolean;
+  flags: string[];
+}
+
+interface StructuralRiskUi {
+  contributorCount: number;
+  topContributorShare: number;
+  soloDevDominance: boolean;
+  youngContributorCohort: boolean;
+  commitMessageEntropy: number;
+  lowEntropyMessages: boolean;
+  isFork: boolean;
+  parentFullName: string | null;
+  forkOfTemplate: boolean;
+  flags: string[];
+  topContributors: Array<{
+    login: string;
+    contributions: number;
+    accountAgeDays: number | null;
+  }>;
+}
+
 interface GithubScanResult {
   owner: string;
   repo: string;
@@ -146,12 +246,20 @@ interface GithubScanResult {
   fileCount: number;
   htmlUrl: string;
   trustScore: number;
+  rawTrustScore?: number;
   riskLevel: "LOW" | "MEDIUM" | "HIGH";
   summary: string;
   codeOverview: string;
   pros: string[];
   cons: string[];
   risks: string[];
+  owner_profile?: OwnerProfileUi | null;
+  scamPatterns?: ScamPatternsUi;
+  antiGaming?: AntiGamingUi;
+  structuralRisk?: StructuralRiskUi;
+  crossSignals?: CrossSignalUi[];
+  mentionedMints?: string[];
+  scoreHistory?: ScoreSnapshot[];
 }
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -191,6 +299,34 @@ function timeAgo(iso: string): string {
   const hrs = Math.floor(diff / 3600000);
   return hrs > 0 ? hrs + "h ago" : "recently";
 }
+
+function Sparkline({ points, width = 60, height = 18, color = "#39FF14" }: { points: number[]; width?: number; height?: number; color?: string }) {
+  if (points.length < 2) return null;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+  const path = points.map((p, i) => {
+    const x = (i / (points.length - 1)) * width;
+    const y = height - ((p - min) / range) * height;
+    return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return (
+    <svg width={width} height={height} className="opacity-80">
+      <path d={path} fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+const ARCHETYPE_STYLES: Record<ArchetypeUi["type"], { color: string; bg: string; border: string; label: string }> = {
+  SNIPER:             { color: "#fb923c", bg: "bg-orange-500/8",  border: "border-orange-500/25",  label: "SNIPER" },
+  AIRDROP_FARMER:     { color: "#a78bfa", bg: "bg-purple-500/8",  border: "border-purple-500/25",  label: "AIRDROP FARMER" },
+  LIQUIDITY_PROVIDER: { color: "#22d3ee", bg: "bg-cyan-500/8",    border: "border-cyan-500/25",    label: "LP" },
+  SMART_MONEY:        { color: "#39FF14", bg: "bg-primary/10",    border: "border-primary/30",     label: "SMART MONEY" },
+  BAG_HOLDER:         { color: "#ef4444", bg: "bg-red-500/8",     border: "border-red-500/25",     label: "BAG HOLDER" },
+  ACTIVE_TRADER:      { color: "#60a5fa", bg: "bg-blue-500/8",    border: "border-blue-500/25",    label: "ACTIVE TRADER" },
+  DORMANT:            { color: "#94a3b8", bg: "bg-white/5",       border: "border-white/15",       label: "DORMANT" },
+  NORMAL:             { color: "#94a3b8", bg: "bg-white/5",       border: "border-white/15",       label: "STANDARD" },
+};
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -408,6 +544,158 @@ function WalletAnalyzer() {
                         <p className="text-xs font-mono text-primary">{timeAgo(result.lastActivity)}</p>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Archetype + on-chain score + score history */}
+                {onchain?.archetype && (() => {
+                  const a = onchain.archetype!;
+                  const style = ARCHETYPE_STYLES[a.type] ?? ARCHETYPE_STYLES.NORMAL;
+                  const hist = (onchain.scoreHistory ?? []).map(s => s.score);
+                  return (
+                    <div className={`rounded-xl border ${style.border} ${style.bg} p-4 space-y-3`}>
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-mono tracking-widest" style={{ color: style.color }}>{style.label}</span>
+                            <span className="text-[9px] font-mono text-white/30">· {a.confidence}% confidence</span>
+                          </div>
+                          <p className="text-sm font-mono text-white font-bold">{a.label}</p>
+                          <p className="text-xs font-mono text-white/55 mt-1 leading-relaxed">{a.description}</p>
+                        </div>
+                        {typeof onchain.onchainScore === "number" && (
+                          <div className="text-right shrink-0">
+                            <p className="text-[9px] font-mono text-white/30 uppercase">On-chain Score</p>
+                            <p className="text-2xl font-mono font-bold" style={{ color: style.color }}>{onchain.onchainScore}</p>
+                            {hist.length >= 2 && (
+                              <div className="mt-1 flex justify-end">
+                                <Sparkline points={hist} color={style.color} />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {a.signals.length > 0 && (
+                        <ul className="flex flex-wrap gap-1.5 pt-1 border-t border-white/5">
+                          {a.signals.map((s, i) => (
+                            <li key={i} className="text-[10px] font-mono text-white/55 px-2 py-0.5 rounded bg-black/30 border border-white/5">{s}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Copy-trade signal */}
+                {onchain?.copyTrade && (
+                  <div className="rounded-xl border border-secondary/25 bg-secondary/[0.05] p-3 flex items-center gap-3">
+                    <Sparkles className="w-4 h-4 text-secondary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-mono text-secondary tracking-widest mb-0.5">COPY-TRADE SIGNAL</p>
+                      <p className="text-xs font-mono text-white/75">{onchain.copyTrade.message}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[9px] font-mono text-white/30">WIN RATE</p>
+                      <p className="text-sm font-mono font-bold text-secondary">{onchain.copyTrade.winRate}%</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* PnL panel */}
+                {onchain?.pnl && (onchain.pnl.closedPositions > 0 || onchain.pnl.totalBoughtUsd > 0) && (() => {
+                  const p = onchain.pnl!;
+                  const realizedColor = p.realizedUsd > 0 ? "text-primary" : p.realizedUsd < 0 ? "text-red-400" : "text-white/60";
+                  return (
+                    <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-white/6 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Activity className="w-3.5 h-3.5 text-primary/70" />
+                          <p className="text-[10px] font-mono text-white/60 tracking-widest">REALIZED PnL · {onchain.scannedTxCount} TXS</p>
+                        </div>
+                        <p className="text-[9px] font-mono text-white/30">{p.closedPositions} closed · {p.winningPositions}W / {p.losingPositions}L</p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-px bg-white/5">
+                        <div className="p-3 bg-black/40">
+                          <p className="text-[9px] font-mono text-white/30 uppercase mb-1">Realized</p>
+                          <p className={`text-sm font-mono font-bold ${realizedColor}`}>{p.realizedUsd >= 0 ? "+" : ""}{fmtUsd(p.realizedUsd)}</p>
+                        </div>
+                        <div className="p-3 bg-black/40">
+                          <p className="text-[9px] font-mono text-white/30 uppercase mb-1">Win Rate</p>
+                          <p className="text-sm font-mono font-bold text-white">{p.winRate}%</p>
+                        </div>
+                        <div className="p-3 bg-black/40">
+                          <p className="text-[9px] font-mono text-white/30 uppercase mb-1">Volume</p>
+                          <p className="text-sm font-mono font-bold text-white/80">{fmtUsd(p.totalBoughtUsd + p.totalSoldUsd)}</p>
+                        </div>
+                      </div>
+                      {p.bestTokenSymbol && p.bestTokenRealizedUsd !== null && p.bestTokenRealizedUsd > 0 && (
+                        <div className="px-4 py-2 border-t border-white/5 bg-primary/[0.03] flex items-center gap-2">
+                          <Sparkles className="w-3 h-3 text-primary" />
+                          <p className="text-[10px] font-mono text-white/60">
+                            Best trade: <span className="text-primary font-bold">{p.bestTokenSymbol}</span> · +{fmtUsd(p.bestTokenRealizedUsd)} realized
+                          </p>
+                        </div>
+                      )}
+                      <p className="px-4 py-2 text-[9px] font-mono text-white/25 leading-relaxed border-t border-white/5">
+                        Approximate — based on SOL flow at scan time. Limited to the last {onchain.scannedTxCount} transactions.
+                      </p>
+                    </div>
+                  );
+                })()}
+
+                {/* Cross-signal intelligence: this wallet's tokens that other channels (repos / X) also touched */}
+                {onchain?.crossSignals && onchain.crossSignals.length > 0 && (
+                  <div className="rounded-xl border border-secondary/30 bg-gradient-to-br from-secondary/[0.06] via-black/30 to-primary/[0.04] overflow-hidden">
+                    <div className="px-4 py-3 border-b border-secondary/15 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-3.5 h-3.5 text-secondary" />
+                        <p className="text-[10px] font-mono text-secondary tracking-widest">CROSS-SIGNAL INTELLIGENCE</p>
+                      </div>
+                      <p className="text-[9px] font-mono text-white/30">{onchain.crossSignals.length} match{onchain.crossSignals.length === 1 ? "" : "es"}</p>
+                    </div>
+                    <p className="px-4 py-2 text-[10px] font-mono text-white/50 border-b border-white/5">
+                      Tokens this wallet traded that ALSO appear in scanned GitHub repos or X mentions — same-entity signal.
+                    </p>
+                    <div className="divide-y divide-white/5">
+                      {onchain.crossSignals.map(cs => {
+                        const verdictColor =
+                          cs.verdict === "SAME_ENTITY_LIKELY" ? "text-red-400 bg-red-500/10 border-red-500/40"
+                          : cs.verdict === "CONVERGENT_INTEREST" ? "text-amber-300 bg-amber-500/10 border-amber-500/40"
+                          : "text-white/50 bg-white/5 border-white/10";
+                        const verdictLabel =
+                          cs.verdict === "SAME_ENTITY_LIKELY" ? "SAME ENTITY LIKELY"
+                          : cs.verdict === "CONVERGENT_INTEREST" ? "CONVERGENT INTEREST"
+                          : "ISOLATED";
+                        return (
+                          <div key={cs.mint} className="px-4 py-3 space-y-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-mono font-bold text-white">{cs.symbol || cs.mint.slice(0, 6) + "…"}</span>
+                              <span className={`text-[9px] font-mono px-2 py-0.5 rounded border ${verdictColor}`}>{verdictLabel}</span>
+                              <span className="text-[9px] font-mono text-white/30">{cs.sourceTypeCount}/3 sources</span>
+                            </div>
+                            <p className="text-[10px] font-mono text-white/65 leading-relaxed">{cs.reason}</p>
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {cs.sources.repos.slice(0, 4).map(r => (
+                                <a key={r} href={`https://github.com/${r}`} target="_blank" rel="noopener noreferrer"
+                                  className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/70 hover:border-secondary/40 hover:text-secondary transition-colors">
+                                  repo:{r}
+                                </a>
+                              ))}
+                              {cs.sources.wallets.slice(0, 4).map(w => (
+                                <span key={w} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/70">
+                                  wallet:{w.slice(0, 4)}…{w.slice(-4)}
+                                </span>
+                              ))}
+                              {cs.sources.x.slice(0, 4).map(x => (
+                                <span key={x} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/70">
+                                  x:@{x}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
@@ -887,7 +1175,274 @@ function GithubScanner() {
                     <p className="text-[10px] font-mono tracking-widest" style={{ color: risk.color }}>{risk.label}</p>
                     <p className="text-xs font-mono text-white/70 mt-0.5">{result.summary}</p>
                   </div>
+                  {(result.scoreHistory ?? []).length >= 2 && (
+                    <div className="shrink-0 self-center">
+                      <Sparkline points={result.scoreHistory!.map(s => s.score)} color={risk.color} width={50} height={20} />
+                    </div>
+                  )}
                 </div>
+
+                {/* Owner profile */}
+                {result.owner_profile && (
+                  <div className="flex items-center gap-3 p-3 rounded-lg border border-white/8 bg-black/30">
+                    <div className="w-7 h-7 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                      <Users className="w-3.5 h-3.5 text-white/50" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-mono text-white truncate">
+                        {result.owner_profile.login}
+                        <span className="text-white/40"> · {result.owner_profile.type}</span>
+                      </p>
+                      <p className="text-[10px] font-mono text-white/40 mt-0.5">
+                        {result.owner_profile.ageDays !== null
+                          ? `Account ${result.owner_profile.ageDays >= 365 ? `${Math.floor(result.owner_profile.ageDays / 365)}y` : `${result.owner_profile.ageDays}d`} old`
+                          : "Account age unknown"}
+                        {" · "}{fmtNum(result.owner_profile.publicRepos)} repos
+                        {" · "}{fmtNum(result.owner_profile.followers)} followers
+                      </p>
+                    </div>
+                    {result.antiGaming?.ownerYoungAccount && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[9px] font-mono text-amber-400">YOUNG ACCOUNT</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Scam patterns — confidence-tiered verdict */}
+                {result.scamPatterns && (result.scamPatterns.hits?.length || result.scamPatterns.matched.length > 0) && (() => {
+                  const sp = result.scamPatterns!;
+                  const hits = sp.hits ?? [];
+                  const verdict = sp.verdict ?? (hits.some(h => h.severity === "HIGH") ? "LIKELY_MALICIOUS" : hits.length > 0 ? "SUSPICIOUS" : "CLEAN");
+                  const verdictMeta = {
+                    LIKELY_MALICIOUS: { label: "LIKELY MALICIOUS", border: "border-red-500/50", bg: "bg-red-500/[0.08]", text: "text-red-400", chipBg: "bg-red-500/15", chipText: "text-red-300" },
+                    SUSPICIOUS:       { label: "SUSPICIOUS",        border: "border-amber-500/40", bg: "bg-amber-500/[0.06]", text: "text-amber-400", chipBg: "bg-amber-500/10", chipText: "text-amber-300" },
+                    LOW_CONCERN:      { label: "LOW CONCERN",       border: "border-yellow-500/30", bg: "bg-yellow-500/[0.04]", text: "text-yellow-400", chipBg: "bg-yellow-500/10", chipText: "text-yellow-300" },
+                    CLEAN:            { label: "CLEAN",             border: "border-white/10", bg: "bg-black/20", text: "text-white/40", chipBg: "bg-white/5", chipText: "text-white/50" },
+                  }[verdict];
+                  const sevColor = (s: "HIGH" | "MEDIUM" | "LOW") =>
+                    s === "HIGH" ? "bg-red-500/20 text-red-300 border-red-500/40"
+                    : s === "MEDIUM" ? "bg-amber-500/15 text-amber-300 border-amber-500/40"
+                    : "bg-yellow-500/10 text-yellow-300 border-yellow-500/30";
+                  return (
+                    <div className={`rounded-xl border ${verdictMeta.border} ${verdictMeta.bg} p-4 space-y-3`}>
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <ShieldAlert className={`w-4 h-4 ${verdictMeta.text}`} />
+                          <p className={`text-[10px] font-mono ${verdictMeta.text} tracking-widest`}>SCAM PATTERN VERDICT</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded ${verdictMeta.chipBg} ${verdictMeta.chipText} text-[10px] font-mono font-bold tracking-wider border ${verdictMeta.border}`}>
+                            {verdictMeta.label}
+                          </span>
+                          <span className="text-[9px] font-mono text-white/40">
+                            risk {sp.riskScore}/100
+                            {typeof sp.confidence === "number" && sp.confidence > 0 ? ` · conf ${(sp.confidence * 100).toFixed(0)}%` : ""}
+                          </span>
+                        </div>
+                      </div>
+                      {hits.length > 0 ? (
+                        <ul className="space-y-2">
+                          {hits.map((h, i) => (
+                            <li key={i} className="space-y-1">
+                              <div className="flex items-start gap-2 flex-wrap">
+                                <span className={`px-1.5 py-0.5 rounded border text-[9px] font-mono font-bold ${sevColor(h.severity)}`}>{h.severity}</span>
+                                <span className="text-xs font-mono text-white/85 leading-relaxed">{h.label}</span>
+                              </div>
+                              {h.evidence && (
+                                <p className="ml-12 text-[10px] font-mono text-white/40 italic leading-snug break-all">"{h.evidence}"</p>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <ul className="space-y-1.5">
+                          {sp.matched.map((m, i) => (
+                            <li key={i} className="flex gap-2 text-xs font-mono text-white/70 leading-relaxed">
+                              <AlertTriangle className="w-3 h-3 text-white/40 shrink-0 mt-0.5" />
+                              <span>{m}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {sp.obfuscationDetected && hits.length === 0 && (
+                        <p className="text-[10px] font-mono text-red-300/70">⚠ Obfuscated JS detected — manual code review strongly advised.</p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Anti-gaming chips */}
+                {result.antiGaming && (result.antiGaming.flags.length > 0 || result.antiGaming.starsSpike) && (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                      <p className="text-[10px] font-mono text-amber-400 tracking-widest">ANTI-GAMING SIGNALS</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="px-2 py-0.5 rounded bg-black/40 border border-white/10 text-[10px] font-mono text-white/60">
+                        {result.antiGaming.starsPerDay.toFixed(1)} stars/day
+                      </span>
+                      {result.antiGaming.starsSpike && (
+                        <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] font-mono text-amber-300">STAR SPIKE</span>
+                      )}
+                      {result.antiGaming.burstyCommits && (
+                        <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] font-mono text-amber-300">BURSTY COMMITS</span>
+                      )}
+                      {result.antiGaming.commitConsistency > 0 && (
+                        <span className="px-2 py-0.5 rounded bg-black/40 border border-white/10 text-[10px] font-mono text-white/60">
+                          consistency {(result.antiGaming.commitConsistency * 100).toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+                    {result.antiGaming.flags.length > 0 && (
+                      <ul className="pt-1 border-t border-white/5 space-y-1">
+                        {result.antiGaming.flags.map((f, i) => (
+                          <li key={i} className="text-[10px] font-mono text-amber-200/70">· {f}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* Structural risk: contributor overlap, commit entropy, fork similarity */}
+                {result.structuralRisk && (result.structuralRisk.flags.length > 0 || result.structuralRisk.topContributors.length > 0) && (() => {
+                  const sr = result.structuralRisk!;
+                  const hasFlags = sr.flags.length > 0;
+                  const accent = hasFlags ? "border-orange-500/30 bg-orange-500/[0.04]" : "border-white/10 bg-black/20";
+                  const headerColor = hasFlags ? "text-orange-300" : "text-white/55";
+                  return (
+                    <div className={`rounded-xl border ${accent} p-3 space-y-3`}>
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <Users className={`w-3.5 h-3.5 ${headerColor}`} />
+                          <p className={`text-[10px] font-mono ${headerColor} tracking-widest`}>STRUCTURAL RISK</p>
+                        </div>
+                        <span className="text-[9px] font-mono text-white/30">
+                          entropy {(sr.commitMessageEntropy * 100).toFixed(0)}% · top contributor {(sr.topContributorShare * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {sr.soloDevDominance && (
+                          <span className="px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/30 text-[10px] font-mono text-orange-300">SOLO-DEV DOMINANCE</span>
+                        )}
+                        {sr.youngContributorCohort && (
+                          <span className="px-2 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-[10px] font-mono text-red-300">YOUNG CONTRIBUTOR COHORT</span>
+                        )}
+                        {sr.lowEntropyMessages && (
+                          <span className="px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/30 text-[10px] font-mono text-orange-300">LOW MESSAGE ENTROPY</span>
+                        )}
+                        {sr.forkOfTemplate && (
+                          <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] font-mono text-amber-300">FORK OF TEMPLATE</span>
+                        )}
+                        {sr.isFork && !sr.forkOfTemplate && sr.parentFullName && (
+                          <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono text-white/55">FORK OF {sr.parentFullName}</span>
+                        )}
+                      </div>
+                      {sr.topContributors.length > 0 && (
+                        <div className="pt-2 border-t border-white/5">
+                          <p className="text-[9px] font-mono text-white/30 tracking-widest uppercase mb-1.5">Top contributors</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {sr.topContributors.map(c => {
+                              const young = c.accountAgeDays !== null && c.accountAgeDays < 60;
+                              return (
+                                <a key={c.login} href={`https://github.com/${c.login}`} target="_blank" rel="noopener noreferrer"
+                                  className={`px-1.5 py-0.5 rounded border text-[10px] font-mono ${young ? "bg-red-500/10 border-red-500/30 text-red-300" : "bg-white/5 border-white/10 text-white/65 hover:border-primary/30"}`}>
+                                  {c.login} <span className="text-white/30">· {c.contributions}</span>
+                                  {c.accountAgeDays !== null && (
+                                    <span className={young ? "text-red-400" : "text-white/30"}> · {c.accountAgeDays}d</span>
+                                  )}
+                                </a>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {sr.flags.length > 0 && (
+                        <ul className="pt-2 border-t border-white/5 space-y-1">
+                          {sr.flags.map((f, i) => (
+                            <li key={i} className="text-[10px] font-mono text-orange-200/70">· {f}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Cross-signal: tokens this repo references that other channels also touched */}
+                {result.crossSignals && result.crossSignals.length > 0 && (
+                  <div className="rounded-xl border border-secondary/30 bg-gradient-to-br from-secondary/[0.06] via-black/30 to-primary/[0.04] overflow-hidden">
+                    <div className="px-4 py-3 border-b border-secondary/15 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-3.5 h-3.5 text-secondary" />
+                        <p className="text-[10px] font-mono text-secondary tracking-widest">CROSS-SIGNAL INTELLIGENCE</p>
+                      </div>
+                      <p className="text-[9px] font-mono text-white/30">{result.crossSignals.length} match{result.crossSignals.length === 1 ? "" : "es"}</p>
+                    </div>
+                    <p className="px-4 py-2 text-[10px] font-mono text-white/50 border-b border-white/5">
+                      Tokens mentioned in this repo's README that ALSO appear in scanned wallets or X mentions.
+                    </p>
+                    <div className="divide-y divide-white/5">
+                      {result.crossSignals.map(cs => {
+                        const verdictColor =
+                          cs.verdict === "SAME_ENTITY_LIKELY" ? "text-red-400 bg-red-500/10 border-red-500/40"
+                          : cs.verdict === "CONVERGENT_INTEREST" ? "text-amber-300 bg-amber-500/10 border-amber-500/40"
+                          : "text-white/50 bg-white/5 border-white/10";
+                        const verdictLabel =
+                          cs.verdict === "SAME_ENTITY_LIKELY" ? "SAME ENTITY LIKELY"
+                          : cs.verdict === "CONVERGENT_INTEREST" ? "CONVERGENT INTEREST"
+                          : "ISOLATED";
+                        return (
+                          <div key={cs.mint} className="px-4 py-3 space-y-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-mono font-bold text-white">{cs.mint.slice(0, 10)}…</span>
+                              <span className={`text-[9px] font-mono px-2 py-0.5 rounded border ${verdictColor}`}>{verdictLabel}</span>
+                              <span className="text-[9px] font-mono text-white/30">{cs.sourceTypeCount}/3 sources</span>
+                              <CopyButton text={cs.mint} />
+                            </div>
+                            <p className="text-[10px] font-mono text-white/65 leading-relaxed">{cs.reason}</p>
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {cs.sources.wallets.slice(0, 4).map(w => (
+                                <span key={w} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/70">
+                                  wallet:{w.slice(0, 4)}…{w.slice(-4)}
+                                </span>
+                              ))}
+                              {cs.sources.repos.slice(0, 4).map(r => (
+                                <span key={r} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/70">
+                                  repo:{r}
+                                </span>
+                              ))}
+                              {cs.sources.x.slice(0, 4).map(x => (
+                                <span key={x} className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/70">
+                                  x:@{x}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Mentioned mints (no cross-signal yet — informational) */}
+                {result.mentionedMints && result.mentionedMints.length > 0 && (!result.crossSignals || result.crossSignals.length === 0) && (
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-white/40" />
+                      <p className="text-[10px] font-mono text-white/55 tracking-widest">SOLANA ADDRESSES IN README</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {result.mentionedMints.slice(0, 6).map(m => (
+                        <a key={m} href={`https://dexscreener.com/solana/${m}`} target="_blank" rel="noopener noreferrer"
+                          className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 border border-white/10 text-white/65 hover:border-primary/30 hover:text-primary transition-colors">
+                          {m.slice(0, 6)}…{m.slice(-4)}
+                        </a>
+                      ))}
+                    </div>
+                    <p className="text-[9px] font-mono text-white/30">
+                      No cross-channel match yet — scan a wallet that holds one of these to test the same-entity signal.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Stats grid */}
