@@ -11,4 +11,10 @@ title = "ShadowNet Source (with latest fixes)"
 id = "996YIrvEpX-DM0dlZ9sMp"
 uri = "file://exports/shadownet-session-changes.tar.gz"
 type = "unspecified"
-title = "ShadowNet — Session Changes Only (58 KB)"
+title = "All session changes (tarball, includes the updated github-trust.ts)"
+
+[[outputs]]
+id = "UslrRUt1fEQSdlxvfvKF8"
+uri = "file://exports/scam-detection-fix.patch.txt"
+type = "text"
+title = "scam-detection-fix.patch (rename to .patch and apply with `git apply`)"
