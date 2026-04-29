@@ -18,3 +18,9 @@ id = "UslrRUt1fEQSdlxvfvKF8"
 uri = "file://exports/scam-detection-fix.patch.txt"
 type = "text"
 title = "scam-detection-fix.patch (rename to .patch and apply with `git apply`)"
+
+[[outputs]]
+id = "lUTdHc2VeUJBBSGb1ZwI9"
+uri = "file://exports/scam-detection-fix.tar.gz"
+type = "unspecified"
+title = "scam-detection-fix.tar.gz — drop-in file + patch + README"
