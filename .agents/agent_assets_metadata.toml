@@ -30,3 +30,9 @@ id = "azXl_HqJLceIHASf7ogQ5"
 uri = "file://exports/shadownet-session-changes-bundle.tar.gz"
 type = "unspecified"
 title = "shadownet-session-changes-bundle.tar.gz — ALL intel-feature changes from this session"
+
+[[outputs]]
+id = "CrtTyrYiioZ1IbUh1ls74"
+uri = "file://exports/replit.md"
+type = "text"
+title = "replit.md — paste this into GitHub's conflict editor (replaces ALL content)"
