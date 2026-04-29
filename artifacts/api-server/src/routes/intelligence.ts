@@ -6,7 +6,8 @@ import rateLimit from "express-rate-limit";
 import { memo, cacheGet, cacheSet } from "../lib/cache.js";
 import { pushScore, getScoreHistory, recordPurchases, getPurchases } from "../lib/history.js";
 import { classifyArchetype, buildPerMintStats, summarisePnl } from "../lib/wallet-archetype.js";
-import { detectScamPatterns, detectAntiGaming, applyTrustAdjustments } from "../lib/github-trust.js";
+import { detectScamPatterns, detectAntiGaming, detectStructuralRisk, applyTrustAdjustments } from "../lib/github-trust.js";
+import { linkWalletMint, linkRepoMint, getCrossSignalsForWallet, getCrossSignalsForRepo, maskWallet } from "../lib/cross-signal.js";
 
 const router = Router();
 
@@ -669,6 +670,12 @@ router.post("/intelligence/wallet/onchain", async (req, res) => {
     }
     if (freshBuys.length) recordPurchases(walletStr, freshBuys);
 
+    // Cross-signal: link this wallet to every mint it has touched (dev tokens
+    // it minted + tokens it has actively bought). Powers the
+    // "same entity promoted and traded this token" insight.
+    for (const mint of devTokenMints) linkWalletMint(walletStr, mint);
+    for (const buy of freshBuys) linkWalletMint(walletStr, buy.mint);
+
     // ── Score history snapshot (for the on-chain "activity score") ──────────
     // Composite signal: more closed wins + lower drawdown = healthier
     const onchainScore = Math.max(0, Math.min(100, Math.round(
@@ -716,6 +723,20 @@ router.post("/intelligence/wallet/onchain", async (req, res) => {
       } : null,
       onchainScore,
       scoreHistory: getScoreHistory(`wallet:${walletStr}`),
+      // Cross-signal: mints this wallet touched that ALSO appear in repos / X.
+      // Mask other wallets — never leak full prior-scan addresses to unrelated callers.
+      crossSignals: getCrossSignalsForWallet(walletStr).map(c => ({
+        mint: c.mint,
+        symbol: tokenMeta[c.mint]?.symbol ?? c.mint.slice(0, 6) + "…",
+        verdict: c.verdict,
+        reason: c.reason,
+        sources: {
+          wallets: c.sources.wallets.map(w => w === walletStr ? w : maskWallet(w)),
+          repos: c.sources.repos,
+          x: c.sources.x,
+        },
+        sourceTypeCount: c.sourceTypeCount,
+      })),
     });
   } catch (err) {
     console.error("wallet/onchain error", err);
@@ -982,6 +1003,7 @@ interface GithubRepoMeta {
   archived: boolean;
   disabled: boolean;
   owner: { login: string; type: string };
+  parent?: { full_name: string; stargazers_count: number };
 }
 
 function parseGithubInput(raw: string): { owner: string; repo: string } | null {
@@ -1087,6 +1109,58 @@ async function fetchContributorCount(owner: string, repo: string): Promise<numbe
     const data = await r.json() as unknown[];
     return Array.isArray(data) ? data.length : 0;
   } catch { return 0; }
+}
+
+interface TopContributor {
+  login: string;
+  contributions: number;
+  accountAgeDays: number | null;
+}
+
+// Fetches up to 10 most-active contributors with their account ages.
+// Account age fetch is cached & best-effort — failures fall back to null.
+async function fetchTopContributors(owner: string, repo: string): Promise<TopContributor[]> {
+  const list = await ghJsonCached<Array<{ login: string; contributions: number; type?: string }>>(
+    `/repos/${owner}/${repo}/contributors?per_page=10`,
+    15 * 60_000,
+  );
+  if (!Array.isArray(list)) return [];
+  const top = list.filter(c => c.type !== "Bot").slice(0, 10);
+  // Look up each contributor's account age in parallel (cached individually)
+  const results = await Promise.all(top.map(async c => {
+    const info = await fetchOwnerInfo(c.login).catch(() => null);
+    const age = info?.createdAt
+      ? Math.max(0, Math.floor((Date.now() - new Date(info.createdAt).getTime()) / 86_400_000))
+      : null;
+    return { login: c.login, contributions: c.contributions, accountAgeDays: age };
+  }));
+  return results;
+}
+
+async function fetchCommitMessages(owner: string, repo: string): Promise<string[]> {
+  const d = await ghJsonCached<Array<{ commit: { message: string } }>>(
+    `/repos/${owner}/${repo}/commits?per_page=30`,
+    15 * 60_000,
+  );
+  if (!Array.isArray(d)) return [];
+  return d
+    .map(c => c.commit?.message ?? "")
+    .filter(s => typeof s === "string" && s.length > 0)
+    .map(s => s.split("\n")[0]); // first line only — body is noise
+}
+
+// Extract Solana mint addresses from README text (and the description).
+// Filters via the same SOL_ADDR_RE + isLikelySolanaAddress used elsewhere so we
+// don't pollute the cross-signal graph with random base58 garbage.
+function extractMintsFromText(text: string | null | undefined): string[] {
+  if (!text) return [];
+  const out = new Set<string>();
+  const matches = text.match(SOL_ADDR_RE) ?? [];
+  for (const m of matches) {
+    if (isLikelySolanaAddress(m)) out.add(m);
+    if (out.size >= 20) break;
+  }
+  return [...out];
 }
 
 async function fetchRootFiles(owner: string, repo: string, branch: string): Promise<string[]> {
@@ -1326,13 +1400,15 @@ router.post("/intelligence/github-scan", githubScanLimiter, async (req, res) => 
     if (!metaResp.ok) return void res.status(502).json({ error: `GitHub API error (${metaResp.status}).` });
     const meta = await metaResp.json() as GithubRepoMeta;
 
-    // Parallel fetch: README, contributors, root files, owner info, commit timestamps
-    const [readme, contributors, rootFiles, ownerInfo, commitTimestamps] = await Promise.all([
+    // Parallel fetch: README, contributors, root files, owner info, commits, top-contributor list, commit messages
+    const [readme, contributors, rootFiles, ownerInfo, commitTimestamps, topContributors, commitMessages] = await Promise.all([
       fetchReadme(owner, repo),
       fetchContributorCount(owner, repo),
       fetchRootFiles(owner, repo, meta.default_branch),
       fetchOwnerInfo(owner),
       fetchCommitTimestamps(owner, repo),
+      fetchTopContributors(owner, repo),
+      fetchCommitMessages(owner, repo),
     ]);
     const pkg = rootFiles.includes("package.json")
       ? await fetchPackageJson(owner, repo, meta.default_branch)
@@ -1342,7 +1418,7 @@ router.post("/intelligence/github-scan", githubScanLimiter, async (req, res) => 
     const ageDays = Math.max(0, Math.round((now - new Date(meta.created_at).getTime()) / 86_400_000));
     const daysSincePush = Math.max(0, Math.round((now - new Date(meta.pushed_at).getTime()) / 86_400_000));
 
-    // ── Scam-pattern + anti-gaming detection (runs whether or not AI is available) ──
+    // ── Scam-pattern + anti-gaming + structural-risk detection (runs whether or not AI is available) ──
     const scam = detectScamPatterns({ readme, rootFiles });
     const gaming = detectAntiGaming({
       stars: meta.stargazers_count,
@@ -1350,6 +1426,21 @@ router.post("/intelligence/github-scan", githubScanLimiter, async (req, res) => 
       recentCommitTimestamps: commitTimestamps,
       ownerCreatedAt: ownerInfo?.createdAt ?? null,
     });
+    const structural = detectStructuralRisk({
+      contributors: topContributors,
+      commitMessages,
+      fork: meta.fork,
+      parentFullName: meta.parent?.full_name ?? null,
+      parentStars: meta.parent?.stargazers_count ?? null,
+      stars: meta.stargazers_count,
+    });
+
+    // ── Cross-signal: extract Solana mint addresses from README + description
+    // and link them to this repo. Then look up which mints have ALSO been
+    // touched by wallets we've scanned — that's the high-value insight.
+    const mentionedMints = extractMintsFromText(`${meta.description ?? ""}\n${readme ?? ""}`);
+    for (const mint of mentionedMints) linkRepoMint(meta.full_name, mint);
+    const repoCrossSignals = getCrossSignalsForRepo(meta.full_name);
 
     // Try AI analysis; fall back to deterministic heuristic if AI fails or env is missing.
     let analysis: AiAnalysis;
@@ -1367,20 +1458,21 @@ router.post("/intelligence/github-scan", githubScanLimiter, async (req, res) => 
       }
     }
 
-    // Trust adjustments: scam patterns + anti-gaming pull the score down
-    const adjustedTrustScore = applyTrustAdjustments(analysis.trustScore, scam, gaming);
+    // Trust adjustments: scam patterns + anti-gaming + structural risk pull the score down
+    const adjustedTrustScore = applyTrustAdjustments(analysis.trustScore, scam, gaming, structural);
     const adjustedRiskLevel = deriveRiskLevel(adjustedTrustScore);
 
-    // Surface scam findings as additional cons/risks so users see them in the UI
+    // Surface scam findings + structural flags as additional cons/risks
     const augmentedRisks = [
       ...analysis.risks,
-      ...scam.drainerSignatures.map(s => `Drainer signal: ${s}`),
-      ...scam.matchedPatterns.filter(m => /seed phrase|phishing|drainer/i.test(m)).map(m => m),
+      ...scam.hits.filter(h => h.severity === "HIGH").map(h => `${h.label} — HIGH severity`),
+      ...scam.hits.filter(h => h.severity === "MEDIUM").map(h => `${h.label} — MEDIUM severity`),
     ].slice(0, 8);
     const augmentedCons = [
       ...analysis.cons,
       ...gaming.flags,
-    ].slice(0, 8);
+      ...structural.flags,
+    ].slice(0, 10);
 
     pushScore(`repo:${meta.full_name}`, adjustedTrustScore);
 
@@ -1428,12 +1520,20 @@ router.post("/intelligence/github-scan", githubScanLimiter, async (req, res) => 
       pros: analysis.pros,
       cons: augmentedCons,
       risks: augmentedRisks,
-      // new structured signals
+      // new structured signals (severity-tiered)
       scamPatterns: {
         matched: scam.matchedPatterns,
         drainerSignatures: scam.drainerSignatures,
         obfuscationDetected: scam.obfuscationDetected,
         riskScore: scam.riskScore,
+        verdict: scam.verdict,
+        confidence: scam.confidence,
+        hits: scam.hits.map(h => ({
+          id: h.id,
+          label: h.label,
+          severity: h.severity,
+          evidence: h.evidence,
+        })),
       },
       antiGaming: {
         starsPerDay: gaming.starsPerDay,
@@ -1443,6 +1543,38 @@ router.post("/intelligence/github-scan", githubScanLimiter, async (req, res) => 
         ownerYoungAccount: gaming.ownerYoungAccount,
         flags: gaming.flags,
       },
+      // structural risk: contributor overlap, commit entropy, fork similarity
+      structuralRisk: {
+        contributorCount: structural.contributorCount,
+        topContributorShare: structural.topContributorShare,
+        soloDevDominance: structural.soloDevDominance,
+        youngContributorCohort: structural.youngContributorCohort,
+        commitMessageEntropy: structural.commitMessageEntropy,
+        lowEntropyMessages: structural.lowEntropyMessages,
+        isFork: structural.isFork,
+        parentFullName: structural.parentFullName,
+        forkOfTemplate: structural.forkOfTemplate,
+        flags: structural.flags,
+        topContributors: topContributors.slice(0, 5).map(c => ({
+          login: c.login,
+          contributions: c.contributions,
+          accountAgeDays: c.accountAgeDays,
+        })),
+      },
+      // cross-signal: tokens hosted in this repo's README that other channels also touched.
+      // Mask wallet addresses — they came from prior unrelated scans.
+      crossSignals: repoCrossSignals.map(c => ({
+        mint: c.mint,
+        verdict: c.verdict,
+        reason: c.reason,
+        sources: {
+          wallets: c.sources.wallets.map(maskWallet),
+          repos: c.sources.repos,
+          x: c.sources.x,
+        },
+        sourceTypeCount: c.sourceTypeCount,
+      })),
+      mentionedMints,
       scoreHistory: getScoreHistory(`repo:${meta.full_name}`),
     });
   } catch (err) {
