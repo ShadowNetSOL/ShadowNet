@@ -36,9 +36,28 @@ export interface ScamPatterns {
   highRiskKeywords: string[];
 }
 
-const SEED_PHRASE_RX = /\b(seed[\s-]?phrase|mnemonic[\s-]?phrase|recovery[\s-]?phrase|12[\s-]?word|24[\s-]?word|enter\s+your\s+seed|paste\s+your\s+private\s+key|connect\s+your\s+wallet\s+to\s+claim)\b/i;
+// HIGH: imperative asks that disclose secrets — actual phishing language.
+// "enter your seed phrase", "paste your private key", "send us your mnemonic", "DM your seed", etc.
+// The noun (phrase|key|words) is REQUIRED — otherwise "share your secret recipe"
+// or "submit your private feedback" would over-match.
+const SECRET_REQUEST_RX = /\b(enter|paste|input|submit|type|share|send\s+(us|me)|dm\s+(us|me)|provide|give\s+(us|me)|reveal|disclose)\s+(your\s+)?(seed|mnemonic|recovery|private|secret)\s+(phrase|key|words?)\b|\bconnect\s+your\s+wallet\s+to\s+claim\b|\bverify\s+your\s+wallet\s+by\s+(entering|pasting|providing|submitting)\b/i;
+
+// LOWER-TIER (suppressed if defensive context): bare mentions of seed phrase / private key.
+// These appear constantly in legitimate security docs ("never share your seed phrase").
+const SECRET_MENTION_RX = /\b(seed[\s-]?phrase|mnemonic[\s-]?phrase|recovery[\s-]?phrase|12[\s-]?word|24[\s-]?word|private[\s-]?key)\b/i;
+
+// Defensive / educational context — if the README contains ANY of these, bare
+// secret mentions are almost certainly warnings, not phishing asks. Each
+// pattern here is multi-word / context-rich on purpose: a single word like
+// "warning" is too easy for an attacker to drop into a malicious README to
+// bypass detection. Patterns must signal *protective intent* clearly.
+const DEFENSIVE_CONTEXT_RX = /\b(never\s+(share|enter|give|paste|send|disclose|reveal|type|store|upload|commit)|do\s+not\s+share|don'?t\s+share|don'?t\s+enter|store\s+(offline|securely|encrypted)|keep\s+(safe|secure|offline|private)|threat[\s-]?model|security\s+(notice|advisory|guide|considerations|model|policy|warning|disclosure)|treat\s+(\w+\s+){0,5}?(as|like)\s+(a\s+|your\s+)?password|guard\s+your\s+(seed|mnemonic|private|secret|key)|protect\s+your\s+(seed|mnemonic|private|secret|key|wallet)|self[\s-]?custodial|non[\s-]?custodial|client[\s-]?side\s+only|stored\s+(only\s+)?(in|on)\s+(localstorage|your\s+browser)|encrypt(ed|ion)?\s+(at\s+rest|locally|in\s+browser))\b/i;
+
 const KEY_THEFT_RX = /\b(secretKey|privateKey|wallet\.privateKey|process\.env\.PRIVATE_KEY|exportPrivateKey)\b/;
-const DRAINER_RX = /\b(drainer|sweep[A-Z]?[\w]*\(|bulkTransfer|drainAllTokens|wallet\.signAndSendAllTransactions|atomic\s*sweep)\b/i;
+// HIGH-confidence drainer code patterns (actual function calls, not the bare word "drainer").
+const DRAINER_CODE_RX = /(sweep[A-Z]\w*\s*\(|bulkTransfer\s*\(|drainAllTokens\s*\(|wallet\.signAndSendAllTransactions|atomic\s*sweep)/i;
+// Bare mention of "drainer" — frequently appears in defensive security docs.
+const DRAINER_MENTION_RX = /\bdrainer\b/i;
 const OBFUSCATION_RX = /(eval\s*\(\s*atob|String\.fromCharCode\(\s*0x|\\x[0-9a-f]{2}\\x[0-9a-f]{2}\\x[0-9a-f]{2}|_0x[a-f0-9]{4,}\s*\(|new\s+Function\s*\(\s*atob)/i;
 const FAKE_GAINS_RX = /\b(guaranteed\s+(profit|returns|gains)|100x\s+overnight|risk[-\s]?free|never\s+loses|airdrop\s+of\s+\d+\s*ETH)\b/i;
 const PHISH_DOMAIN_RX = /(metamask[-_]?(verify|connect|support)|phant[o0]m[-_]?(verify|support)|wallet[-_]?(connect|verify)[-_]?\.(io|com|app|xyz))/i;
@@ -64,14 +83,29 @@ export function detectScamPatterns(args: {
   const text = args.readme ?? "";
   const hits: ScamPatternHit[] = [];
 
-  if (SEED_PHRASE_RX.test(text)) {
-    hits.push({ id: "seed-phrase", label: "Asks for seed phrase / private key", severity: "HIGH", evidence: snippet(text, SEED_PHRASE_RX) });
+  // Whole-document defensive context — if the README is clearly educational
+  // (talks about NEVER sharing keys, threat models, self-custody, etc.), we
+  // suppress bare keyword mentions so security guides don't get flagged as
+  // phishing. Imperative asks ("enter your seed phrase here") still trigger.
+  const hasDefensiveContext = DEFENSIVE_CONTEXT_RX.test(text);
+
+  // HIGH: actual phishing language — imperative ask for secrets.
+  if (SECRET_REQUEST_RX.test(text)) {
+    hits.push({ id: "seed-request", label: "Imperative ask for seed phrase / private key", severity: "HIGH", evidence: snippet(text, SECRET_REQUEST_RX) });
+  } else if (SECRET_MENTION_RX.test(text) && !hasDefensiveContext) {
+    // MEDIUM: bare mention with NO defensive framing — still suspicious but not certain.
+    hits.push({ id: "secret-mention", label: "Mentions seed phrase / private key without security context", severity: "MEDIUM", evidence: snippet(text, SECRET_MENTION_RX) });
   }
+
   if (KEY_THEFT_RX.test(text)) {
     hits.push({ id: "key-theft-code", label: "Private-key extraction code referenced", severity: "HIGH", evidence: snippet(text, KEY_THEFT_RX) });
   }
-  if (DRAINER_RX.test(text)) {
-    hits.push({ id: "drainer", label: "Drainer / bulk-transfer pattern", severity: "HIGH", evidence: snippet(text, DRAINER_RX) });
+  // HIGH: actual drainer code patterns (function calls, atomic-sweep code).
+  if (DRAINER_CODE_RX.test(text)) {
+    hits.push({ id: "drainer-code", label: "Drainer / bulk-transfer code pattern", severity: "HIGH", evidence: snippet(text, DRAINER_CODE_RX) });
+  } else if (DRAINER_MENTION_RX.test(text) && !hasDefensiveContext) {
+    // MEDIUM: bare word "drainer" with no defensive framing.
+    hits.push({ id: "drainer-mention", label: "References drainer concepts without security context", severity: "MEDIUM", evidence: snippet(text, DRAINER_MENTION_RX) });
   }
   if (OBFUSCATION_RX.test(text)) {
     hits.push({ id: "obfuscation", label: "Obfuscated JavaScript in README", severity: "MEDIUM", evidence: snippet(text, OBFUSCATION_RX) });
@@ -302,6 +336,12 @@ export function detectStructuralRisk(args: {
 
 // Adjust the trust score downward for scam/anti-gaming/structural signals.
 // Severity-aware: HIGH scam hits dominate, MEDIUM accumulate, LOW corroborate.
+//
+// Important calibration note: a brand-new legitimate project will, by
+// construction, trip several "newness" signals (young owner, solo dev,
+// bursty commits, low contributor count). When the scam verdict is CLEAN we
+// cap the cumulative damage from these so a healthy new project doesn't
+// land at 2/100 — those signals indicate "unproven", not "malicious".
 export function applyTrustAdjustments(
   baseScore: number,
   scam: ScamPatterns,
@@ -320,16 +360,34 @@ export function applyTrustAdjustments(
   if (scam.verdict === "LIKELY_MALICIOUS") s = Math.min(s, 25);
   else if (scam.verdict === "SUSPICIOUS") s = Math.min(s, 55);
 
-  if (gaming.starsSpike) s -= 15;
-  if (gaming.ownerYoungAccount) s -= 10;
-  if (gaming.burstyCommits) s -= 8;
+  // Split structural/gaming signals into two buckets:
+  //   - "newness" signals (young owner, solo dev, bursty commits) co-occur
+  //     for any honest brand-new project, so we cap their stacked damage
+  //     when the scam verdict is CLEAN to avoid double-penalizing newness.
+  //   - "coordinated-fakery" signals (sock-puppet cohort, low-entropy bot
+  //     commits, fork-of-template, organic star spikes) are strong
+  //     intentional-gaming markers that should ALWAYS apply in full, even
+  //     when the regex-based scam detector returned CLEAN — those are the
+  //     signals that catch attackers who hand-tuned their README to evade
+  //     keyword matching.
+  let newnessPenalty = 0;
+  if (gaming.ownerYoungAccount) newnessPenalty += 8;
+  if (gaming.burstyCommits) newnessPenalty += 5;
+  if (structural?.soloDevDominance) newnessPenalty += 5;
 
-  if (structural) {
-    if (structural.soloDevDominance) s -= 8;
-    if (structural.youngContributorCohort) s -= 18;
-    if (structural.lowEntropyMessages) s -= 10;
-    if (structural.forkOfTemplate) s -= 12;
+  let fakeryPenalty = 0;
+  if (gaming.starsSpike) fakeryPenalty += 15;
+  if (structural?.youngContributorCohort) fakeryPenalty += 18;
+  if (structural?.lowEntropyMessages) fakeryPenalty += 10;
+  if (structural?.forkOfTemplate) fakeryPenalty += 12;
+
+  // Cap newness damage at -15 when scam=CLEAN — a new honest project should
+  // land as "unproven", not "malicious". Once scam patterns hit, the cap is
+  // removed so the signals stack normally.
+  if (scam.verdict === "CLEAN") {
+    newnessPenalty = Math.min(newnessPenalty, 15);
   }
+  s -= (newnessPenalty + fakeryPenalty);
 
   return Math.max(0, Math.min(100, Math.round(s)));
 }
