@@ -24,3 +24,9 @@ id = "lUTdHc2VeUJBBSGb1ZwI9"
 uri = "file://exports/scam-detection-fix.tar.gz"
 type = "unspecified"
 title = "scam-detection-fix.tar.gz — drop-in file + patch + README"
+
+[[outputs]]
+id = "azXl_HqJLceIHASf7ogQ5"
+uri = "file://exports/shadownet-session-changes-bundle.tar.gz"
+type = "unspecified"
+title = "shadownet-session-changes-bundle.tar.gz — ALL intel-feature changes from this session"
