@@ -108,10 +108,18 @@ Key pages (in `src/pages/app/`):
   - **GITHUB** — Repo trust scanner
 
 Backend endpoints (in `artifacts/api-server/src/routes/intelligence.ts`):
-- `POST /api/intelligence/wallet` — RPC fan-out (balance, tokens, recent sigs) with `aiSummary` (OpenAI gpt-5.4 with 8s timeout + heuristic fallback)
-- `POST /api/intelligence/wallet/onchain` — batches `getParsedTransactions` (chunks of 20, up to 200 sigs); detects dev tokens via `initializeMint*` where `mintAuthority===wallet`; classifies activity as BUY/SELL/RECEIVE/SEND using SOL+stables ("value-like") vs. other token deltas; skips failed txs (`meta.err != null`)
-- `POST /api/intelligence/github` — GitHub repo trust scanner
+- `POST /api/intelligence/wallet` — RPC fan-out (balance, tokens, recent sigs) with `aiSummary` (OpenAI gpt-5.4 with 8s timeout + heuristic fallback, cached 5min)
+- `POST /api/intelligence/wallet/onchain` — batches `getParsedTransactions` (chunks of 20, up to 200 sigs); detects dev tokens via `initializeMint*` where `mintAuthority===wallet`; classifies activity as BUY/SELL/RECEIVE/SEND using SOL+stables ("value-like") vs. other token deltas; skips failed txs (`meta.err != null`). Now also returns: per-mint **PnL** (realized via FIFO replay against current SOL-flow valuations + protective `costBasisPerUnit > 0` guard), **archetype** (SNIPER/AIRDROP_FARMER/SMART_MONEY/BAG_HOLDER/ACTIVE_TRADER/DORMANT/NORMAL with confidence + signals), **on-chain score** + **scoreHistory** (24-point ring buffer per wallet), and **copy-trade signal** (winners/moonshots vs prior recorded entries)
+- `POST /api/intelligence/github-scan` — GitHub repo trust scanner. Now also returns: **owner_profile** (account age + repo/follower counts), **scamPatterns** (seed-phrase / drainer / obfuscation / phishing-domain regex matches), **antiGaming** (stars/day, star-spike flag, commit-frequency consistency, bursty commits, young-owner flag), and **scoreHistory** sparkline data. Scam patterns + anti-gaming flags pull `trustScore` down via `applyTrustAdjustments`; original AI score preserved as `rawTrustScore`.
 - `POST /api/intelligence/x-ca`, `POST /api/intelligence/smart-followers` — legacy X stubs (no longer reachable from the unified X tab UI; kept for now until a single unified X endpoint is implemented)
+
+Helper modules under `artifacts/api-server/src/lib/`:
+- `cache.ts` — Map+TTL cache with `memo()` get-or-fetch wrapper. Periodic eviction sweep + cap-free per-entry expiry. Drop-in replacement for Redis later.
+- `history.ts` — Per-subject score ring buffer (24 snapshots, 5min collapse window) and per-wallet purchase history (50 entries) for the copy-trade signal. Both Maps are LRU-bounded at 5000 subjects to prevent OOM.
+- `wallet-archetype.ts` — Pure: `buildPerMintStats` (chronological replay → per-mint flow/PnL), `summarisePnl` (aggregates + best/worst mint), `classifyArchetype` (8 archetypes by activity shape).
+- `github-trust.ts` — Pure: `detectScamPatterns` (README regex bank for seed-phrase / drainer / obfuscation / phishing / fake-gains, plus suspicious filenames), `detectAntiGaming` (star-velocity, commit-gap consistency, owner age), `applyTrustAdjustments` (drainer −50, obfuscation −20, seed-phrase −30, star-spike −15, young-owner −10, bursty −8).
+
+Caching layer: SOL price (60s), DexScreener token meta (5min, per-mint key), GitHub `/users/:owner` (30min), GitHub `/repos/:owner/:repo/commits` (15min), AI wallet summary (5min, keyed by coarse stats), AI repo analysis (10min, keyed by `full_name + pushed_at` so fresh pushes invalidate).
 
 No DB persistence for tracked wallets — privacy-first by design.
 
