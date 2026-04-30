@@ -19,8 +19,8 @@ catalogs:
       specifier: ^4.2.4
       version: 4.2.4
     '@tanstack/react-query':
-      specifier: ^5.90.21
-      version: 5.90.21
+      specifier: ^5.100.6
+      version: 5.100.6
     '@types/node':
       specifier: ^25.6.0
       version: 25.6.0
@@ -46,8 +46,8 @@ catalogs:
       specifier: 12.38.0
       version: 12.38.0
     lucide-react:
-      specifier: ^0.545.0
-      version: 0.545.0
+      specifier: ^1.14.0
+      version: 1.14.0
     react:
       specifier: 19.2.5
       version: 19.2.5
@@ -67,8 +67,8 @@ catalogs:
       specifier: ^8.0.10
       version: 8.0.10
     zod:
-      specifier: ^4.3.6
-      version: 4.3.6
+      specifier: ^4.4.1
+      version: 4.4.1
 
 overrides:
   esbuild>@esbuild/darwin-arm64: '-'
@@ -212,9 +212,12 @@ importers:
       express-slow-down:
         specifier: ^3.1.0
         version: 3.1.0(express@5.2.1)
+      helmet:
+        specifier: ^8.0.0
+        version: 8.1.0
       openai:
-        specifier: ^6.34.0
-        version: 6.34.0(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.3.6)
+        specifier: ^6.35.0
+        version: 6.35.0(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.4.1)
     devDependencies:
       '@types/cookie-parser':
         specifier: ^1.4.10
@@ -354,7 +357,7 @@ importers:
         version: 4.2.4(vite@8.0.10(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
       '@tanstack/react-query':
         specifier: 'catalog:'
-        version: 5.90.21(react@19.2.5)
+        version: 5.100.6(react@19.2.5)
       '@types/node':
         specifier: 'catalog:'
         version: 25.6.0
@@ -393,7 +396,7 @@ importers:
         version: 1.4.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       lucide-react:
         specifier: 'catalog:'
-        version: 0.545.0(react@19.2.5)
+        version: 1.14.0(react@19.2.5)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -441,13 +444,13 @@ importers:
         version: 3.9.0(react@19.2.5)
       zod:
         specifier: 'catalog:'
-        version: 4.3.6
+        version: 4.4.1
 
   lib/api-client-react:
     dependencies:
       '@tanstack/react-query':
         specifier: 'catalog:'
-        version: 5.90.21(react@19.2.5)
+        version: 5.100.6(react@19.2.5)
 
   lib/api-spec:
     devDependencies:
@@ -459,7 +462,7 @@ importers:
     dependencies:
       zod:
         specifier: 'catalog:'
-        version: 4.3.6
+        version: 4.4.1
 
   lib/db:
     dependencies:
@@ -468,13 +471,13 @@ importers:
         version: 0.45.2(@types/pg@8.20.0)(pg@8.20.0)
       drizzle-zod:
         specifier: ^0.8.3
-        version: 0.8.3(drizzle-orm@0.45.2(@types/pg@8.20.0)(pg@8.20.0))(zod@4.3.6)
+        version: 0.8.3(drizzle-orm@0.45.2(@types/pg@8.20.0)(pg@8.20.0))(zod@4.4.1)
       pg:
         specifier: ^8.20.0
         version: 8.20.0
       zod:
         specifier: 'catalog:'
-        version: 4.3.6
+        version: 4.4.1
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1567,11 +1570,11 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
 
-  '@tanstack/query-core@5.90.20':
-    resolution: {integrity: sha512-OMD2HLpNouXEfZJWcKeVKUgQ5n+n3A2JFmBaScpNDUqSrQSjiveC7dKMe53uJUg1nDG16ttFPz2xfilz6i2uVg==}
+  '@tanstack/query-core@5.100.6':
+    resolution: {integrity: sha512-Os2CPUr98to98RYm+D4qGqGkiffn7MGSyl2547a4MljVkHE30AMJRqTiyCqBfMwzAx/I91vCkAxp5tHSla6Twg==}
 
-  '@tanstack/react-query@5.90.21':
-    resolution: {integrity: sha512-0Lu6y5t+tvlTJMTO7oh5NSpJfpg/5D41LlThfepTixPYkJ0sE2Jj0m0f6yYqujBwIXlId87e234+MxG3D3g7kg==}
+  '@tanstack/react-query@5.100.6':
+    resolution: {integrity: sha512-uVSrps0PV16Cxmcn2rvL+dUhwTpTUtiRW347AEeYxMZXO2pZe9ja7E24PAMGoQ5u2g89DD8u4QhOviBk+RN8RA==}
     peerDependencies:
       react: ^18 || ^19
 
@@ -2326,6 +2329,10 @@ packages:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
     engines: {node: '>= 0.4'}
 
+  helmet@8.1.0:
+    resolution: {integrity: sha512-jOiHyAZsmnr8LqoPGmCjYAaiuWwjAPLgY8ZX2XrmHawt99/u1y6RgrZMTeoPfpUbV96HOalYgz1qzkRbw54Pmg==}
+    engines: {node: '>=18.0.0'}
+
   htmlparser2@10.1.0:
     resolution: {integrity: sha512-VTZkM9GWRAtEpveh7MSF6SjjrpNVNNVJfFup7xTY3UpFtm67foy9HDVXneLtFVt4pMz5kZtgNcvCniNFb1hlEQ==}
 
@@ -2484,8 +2491,8 @@ packages:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
     hasBin: true
 
-  lucide-react@0.545.0:
-    resolution: {integrity: sha512-7r1/yUuflQDSt4f1bpn5ZAocyIxcTyVyBBChSVtBKn5M+392cPmI5YJMWOJKk/HUWGm5wg83chlAZtCcGbEZtw==}
+  lucide-react@1.14.0:
+    resolution: {integrity: sha512-+1mdWcfSJVUsaTIjN9zoezmUhfXo5l0vP7ekBMPo3jcS/aIkxHnXqAPsByszMZx/Y8oQBRJxJx5xg+RH3urzxA==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -2603,8 +2610,8 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
-  openai@6.34.0:
-    resolution: {integrity: sha512-yEr2jdGf4tVFYG6ohmr3pF6VJuveP0EA/sS8TBx+4Eq5NT10alu5zg2dmxMXMgqpihRDQlFGpRt2XwsGj+Fyxw==}
+  openai@6.35.0:
+    resolution: {integrity: sha512-L/skwIGnt5xQZHb0UfTu9uAUKbis3ehKypOuJKi20QvG7UStV6C8IC3myGYHcdiF4kms/bAvOJ9UqqNWqi8x/Q==}
     hasBin: true
     peerDependencies:
       ws: ^8.18.0
@@ -3144,6 +3151,7 @@ packages:
 
   uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   vary@1.1.2:
@@ -3271,8 +3279,8 @@ packages:
     resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
     engines: {node: '>=18'}
 
-  zod@4.3.6:
-    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+  zod@4.4.1:
+    resolution: {integrity: sha512-a6ENMBBGZBsnlSebQ/eKCguSBeGKSf4O7BPnqVPmYGtpBYI7VSqoVqw+QcB7kPRjbqPwhYTpFbVj/RqNz/CT0Q==}
 
 snapshots:
 
@@ -4458,11 +4466,11 @@ snapshots:
       tailwindcss: 4.2.4
       vite: 8.0.10(@types/node@25.6.0)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  '@tanstack/query-core@5.90.20': {}
+  '@tanstack/query-core@5.100.6': {}
 
-  '@tanstack/react-query@5.90.21(react@19.2.5)':
+  '@tanstack/react-query@5.100.6(react@19.2.5)':
     dependencies:
-      '@tanstack/query-core': 5.90.20
+      '@tanstack/query-core': 5.100.6
       react: 19.2.5
 
   '@titaniumnetwork-dev/ultraviolet@3.2.10':
@@ -4906,10 +4914,10 @@ snapshots:
       '@types/pg': 8.20.0
       pg: 8.20.0
 
-  drizzle-zod@0.8.3(drizzle-orm@0.45.2(@types/pg@8.20.0)(pg@8.20.0))(zod@4.3.6):
+  drizzle-zod@0.8.3(drizzle-orm@0.45.2(@types/pg@8.20.0)(pg@8.20.0))(zod@4.4.1):
     dependencies:
       drizzle-orm: 0.45.2(@types/pg@8.20.0)(pg@8.20.0)
-      zod: 4.3.6
+      zod: 4.4.1
 
   dunder-proto@1.0.1:
     dependencies:
@@ -5168,6 +5176,8 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
+  helmet@8.1.0: {}
+
   htmlparser2@10.1.0:
     dependencies:
       domelementtype: 2.3.0
@@ -5307,7 +5317,7 @@ snapshots:
     dependencies:
       js-tokens: 4.0.0
 
-  lucide-react@0.545.0(react@19.2.5):
+  lucide-react@1.14.0(react@19.2.5):
     dependencies:
       react: 19.2.5
 
@@ -5402,10 +5412,10 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openai@6.34.0(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.3.6):
+  openai@6.35.0(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.4.1):
     optionalDependencies:
       ws: 8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      zod: 4.3.6
+      zod: 4.4.1
 
   orval@8.9.0(prettier@3.8.3)(typescript@5.9.3):
     dependencies:
@@ -6030,4 +6040,4 @@ snapshots:
 
   yoctocolors@2.1.2: {}
 
-  zod@4.3.6: {}
+  zod@4.4.1: {}
