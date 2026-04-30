@@ -1,87 +1,86 @@
+/**
+ * Session + fingerprint generation.
+ *
+ * Fingerprints are built from atomic preset bundles where every surface
+ * (UA ↔ platform ↔ WebGL ↔ fonts ↔ resolution) is internally consistent.
+ * Region-coherent locale/timezone is layered on top: a US relay paired
+ * with a Tokyo timezone is the kind of mismatch anti-bot flags instantly.
+ *
+ * The session's fingerprint is stored server-side keyed by sessionId so
+ * the bare-server hook can align outgoing HTTP headers (Accept-Language,
+ * sec-ch-ua-platform) with the page-side shim's spoofed surfaces.
+ */
 import { Router, type IRouter } from "express";
 import { GetFingerprintProfileResponse, StartStealthSessionResponse } from "@workspace/api-zod";
+import { getRegion, getRegions } from "../lib/regions";
+import { putSession, type SessionFingerprint } from "../lib/sessionStore";
+import { buildFingerprint, listPresets } from "../lib/fingerprintPresets";
 
 const router: IRouter = Router();
 
-const USER_AGENTS = [
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-  "Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
-  "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
-];
-
-const RESOLUTIONS = ["1920x1080", "2560x1440", "1366x768", "1440x900", "1280x800", "1680x1050", "3840x2160", "1920x1200"];
-const TIMEZONES = ["America/New_York", "Europe/London", "Asia/Tokyo", "Europe/Berlin", "America/Los_Angeles", "Asia/Singapore", "Europe/Paris", "America/Chicago"];
-const LANGUAGES = ["en-US", "en-GB", "de-DE", "fr-FR", "ja-JP", "es-ES", "zh-CN", "pt-BR"];
-const PLATFORMS = ["Win32", "MacIntel", "Linux x86_64", "Linux aarch64"];
-const WEBGL_VENDORS = ["Google Inc. (NVIDIA)", "Google Inc. (AMD)", "Intel Inc.", "Apple Inc.", "Google Inc. (Intel)"];
-const WEBGL_RENDERERS = [
-  "ANGLE (NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0)",
-  "ANGLE (AMD Radeon RX 6800 XT Direct3D11 vs_5_0 ps_5_0)",
-  "Intel(R) Iris(R) Xe Graphics (0x000046A6)",
-  "Apple M2",
-  "ANGLE (NVIDIA GeForce GTX 1660 SUPER Direct3D11 vs_5_0 ps_5_0)",
-];
-const FONT_POOLS = [
-  ["Arial", "Helvetica", "Times New Roman", "Courier New", "Georgia", "Verdana", "Trebuchet MS"],
-  ["Arial", "Segoe UI", "Calibri", "Cambria", "Times New Roman", "Consolas", "Tahoma"],
-  ["San Francisco", "Helvetica Neue", "Arial", "Menlo", "Georgia", "Courier", "Geneva"],
-  ["Ubuntu", "Liberation Sans", "DejaVu Sans", "FreeSerif", "Courier 10 Pitch", "Arial"],
-];
-
-function randomFrom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+interface BuiltProfile {
+  profileId: string;
+  fingerprint: SessionFingerprint;
 }
 
-function randomHash(): string {
-  return Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+function buildProfile(opts: { regionId?: string; presetId?: string; device?: "desktop" | "mobile" }): BuiltProfile {
+  const region = (opts.regionId && getRegion(opts.regionId)) || getRegions()[0]!;
+  const fingerprint = buildFingerprint({
+    regionId: region.id,
+    locale: region.locale,
+    timezone: region.timezone,
+    presetId: opts.presetId,
+    device: opts.device,
+  });
+  const profileId = `fp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  return { profileId, fingerprint };
 }
 
-router.get("/session/fingerprint", (_req, res) => {
-  const profileId = `fp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+router.get("/session/fingerprint", (req, res) => {
+  const regionId = typeof req.query["region"] === "string" ? req.query["region"] : undefined;
+  const presetId = typeof req.query["preset"] === "string" ? req.query["preset"] : undefined;
+  const device = req.query["device"] === "mobile" ? "mobile" : req.query["device"] === "desktop" ? "desktop" : undefined;
+  const { profileId, fingerprint } = buildProfile({ regionId, presetId, device });
   const data = GetFingerprintProfileResponse.parse({
-    userAgent: randomFrom(USER_AGENTS),
-    screenResolution: randomFrom(RESOLUTIONS),
-    colorDepth: randomFrom([24, 30, 48]),
-    timezone: randomFrom(TIMEZONES),
-    language: randomFrom(LANGUAGES),
-    platform: randomFrom(PLATFORMS),
-    webglVendor: randomFrom(WEBGL_VENDORS),
-    webglRenderer: randomFrom(WEBGL_RENDERERS),
-    canvasHash: randomHash(),
-    audioHash: randomHash(),
-    fonts: randomFrom(FONT_POOLS),
+    userAgent: fingerprint.userAgent,
+    screenResolution: fingerprint.screenResolution,
+    colorDepth: fingerprint.colorDepth,
+    timezone: fingerprint.timezone,
+    language: fingerprint.language,
+    platform: fingerprint.platform,
+    webglVendor: fingerprint.webglVendor,
+    webglRenderer: fingerprint.webglRenderer,
+    canvasHash: fingerprint.canvasNoise,
+    audioHash: fingerprint.audioNoise,
+    fonts: fingerprint.fonts,
     profileId,
   });
   res.json(data);
 });
 
-router.post("/session/start", (req, res) => {
-  const { relayNodeId, fingerprintProfileId } = req.body ?? {};
-  const sessionId = `sn_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour
+router.get("/session/presets", (_req, res) => {
+  res.json({ presets: listPresets() });
+});
 
-  const maskedOctets = [
-    Math.floor(Math.random() * 200) + 10,
-    Math.floor(Math.random() * 254) + 1,
-    Math.floor(Math.random() * 254) + 1,
-    Math.floor(Math.random() * 254) + 1,
-  ];
+router.post("/session/start", (req, res) => {
+  const body = (req.body ?? {}) as { relayNodeId?: string; presetId?: string; device?: "desktop" | "mobile" };
+  const { profileId, fingerprint } = buildProfile({ regionId: body.relayNodeId, presetId: body.presetId, device: body.device });
+  const region = getRegion(fingerprint.regionId)!;
+  const sessionId = `sn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
+
+  putSession(sessionId, fingerprint, expiresAt.getTime());
 
   const data = StartStealthSessionResponse.parse({
     sessionId,
     startedAt: now.toISOString(),
-    fingerprintProfileId: fingerprintProfileId ?? `fp_${Math.random().toString(36).slice(2, 10)}`,
-    relayNodeId: relayNodeId ?? undefined,
-    maskedIp: maskedOctets.join("."),
+    fingerprintProfileId: profileId,
+    relayNodeId: region.id,
+    maskedIp: `${region.countryCode}-${region.id}`,
     status: "active",
     expiresAt: expiresAt.toISOString(),
   });
-
   res.json(data);
 });
 

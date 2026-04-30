@@ -1,10 +1,114 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useGetFingerprintProfile, useGetRelayNodes, useStartStealthSession } from "@workspace/api-client-react";
 import { Shield, RefreshCw, Server, Globe, XCircle, Zap, CheckCircle, Clock, Wifi, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
+import { launchUrl, persistFingerprint, precheck, orchestrate } from "@/lib/proxy";
+import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 
 const BASE = import.meta.env.BASE_URL as string;
+
+// Specific failure framing — never the generic "site needs secure session"
+// message. Users build trust faster when we tell them why something is
+// gated, in plain language, without sounding like a stack trace.
+const CHALLENGE_LABELS: Record<string, string> = {
+  cloudflare:    "Blocked by Cloudflare challenge",
+  turnstile:     "Cloudflare Turnstile gate",
+  hcaptcha:      "hCaptcha gate",
+  recaptcha:     "reCAPTCHA gate",
+  datadome:      "Blocked by DataDome anti-bot",
+  perimeterx:    "Blocked by PerimeterX / HUMAN",
+  akamai:        "Akamai Bot Manager gate",
+  geoblock:      "Region-blocked at the destination",
+  soft_block:    "Site loaded but isn't responding (likely anti-bot)",
+  blank_render:  "Site didn't render — likely a fingerprint block",
+  ws_blocked:    "WebSocket connection refused — realtime gated",
+};
+
+function challengeLabel(key: string | null | undefined): string {
+  if (!key) return "Anti-bot detected";
+  return CHALLENGE_LABELS[key] ?? `Blocked (${key.replace(/_/g, " ")})`;
+}
+
+async function openThroughProxy(
+  rawUrl: string,
+  toast: ReturnType<typeof useToast>["toast"],
+  setLocation: (path: string) => void,
+): Promise<void> {
+  // Step 1: precheck for anti-bot signals.
+  let preChallenge: string | null = null;
+  let preConfidence = 0;
+  try {
+    const pre = await precheck(rawUrl);
+    preChallenge = pre.challenge;
+    preConfidence = (pre as unknown as { verdict?: { confidence?: number } }).verdict?.confidence ?? 0;
+  } catch { /* advisory only */ }
+
+  // Step 2: ask the orchestrator. Caller advertises entitlement; the
+  // server validates server-side via wallet/token checks.
+  const entitlement = (localStorage.getItem("sn_entitlement") as "free" | "holder") || "free";
+  let decision: Awaited<ReturnType<typeof orchestrate>> | null = null;
+  try {
+    decision = await orchestrate(rawUrl, {
+      entitlement,
+      precheck: preChallenge ? { challenge: preChallenge, confidence: preConfidence } : undefined,
+    });
+  } catch { /* fall through to plain proxy below */ }
+
+  // Step 3a: orchestrator routed us to a remote session — open the viewer.
+  if (decision && decision.type === "remote" && decision.available) {
+    setLocation(`/app/remote?id=${encodeURIComponent(decision.sessionId)}`);
+    return;
+  }
+
+  // Step 3b: orchestrator wants us in remote but the user isn't entitled,
+  // or the pool is offline. Surface the framing the architect recommended:
+  //   "this site is blocking standard sessions — open in secure mode?"
+  if (decision && decision.type === "remote" && !decision.available) {
+    const isHolder = entitlement === "holder";
+    // Pull the real underlying reason — the classifier already knows
+    // exactly *why* this site needs upgrading. Use that, not a generic
+    // "this site is gated" string.
+    const reasonChallenge = preChallenge || (decision.fallback?.reason?.split(":")[1]?.split("@")[0] ?? null);
+    const specific = challengeLabel(reasonChallenge);
+
+    const title = decision.reason === "needs_holder_tier"
+      ? specific
+      : decision.reason === "no_capacity"
+        ? "Secure pool at capacity"
+        : "Secure session unavailable";
+    const description = decision.reason === "needs_holder_tier"
+      ? "Open in secure mode for full compatibility — real Chromium, your IP never leaves the relay. Hold the ShadowNet token to unlock. Falling back to standard session for now."
+      : isHolder
+        ? `${decision.unlockHint} Falling back to standard session.`
+        : "Falling back to standard session.";
+    toast({ title, description });
+  } else if (preChallenge) {
+    toast({
+      title: challengeLabel(preChallenge),
+      description: "Standard session will try anyway. If the page loops or stalls, an upgrade prompt will appear.",
+    });
+  }
+
+  // Step 4: open through the proxy (the default path or the fallback).
+  try {
+    const target = await launchUrl(rawUrl);
+    // Drop "noopener" so the proxied tab can postMessage back via
+    // window.opener (used by the wallet shim). noreferrer still removes
+    // the Referer header.
+    window.open(target, "_blank", "noreferrer");
+  } catch (err) {
+    toast({
+      title: "Proxy launch failed",
+      description: err instanceof Error ? err.message : String(err),
+      variant: "destructive",
+    });
+  }
+  // Suppress unused-var lint when the action helper isn't used in this build.
+  void ToastAction;
+}
 
 interface RelayResult {
   ok: boolean;
@@ -22,6 +126,8 @@ interface RelayResult {
 }
 
 export default function AppSessions() {
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const { data: profile, isLoading: profileLoading, refetch } = useGetFingerprintProfile();
   const { data: nodesData } = useGetRelayNodes();
   const { mutate: startSession, isPending: isStarting, data: activeSession, reset } = useStartStealthSession();
@@ -38,6 +144,28 @@ export default function AppSessions() {
       if (n) setSelectedNode(n.id);
     }
   }, [nodesData, selectedNode]);
+
+  // Push the active fingerprint into localStorage so the UV inject hook
+  // can read it inside any proxied page. We pass the full surface (canvas
+  // noise seed, WebGL vendor/renderer, screen, audio) so the shim has
+  // everything it needs to look coherent — random fields + spoofed UA
+  // would itself be a tell.
+  useEffect(() => {
+    if (!profile) return;
+    persistFingerprint({
+      userAgent: profile.userAgent,
+      platform: profile.platform,
+      language: profile.language,
+      languages: [profile.language],
+      timezone: profile.timezone,
+      screenResolution: profile.screenResolution,
+      colorDepth: profile.colorDepth,
+      webglVendor: profile.webglVendor,
+      webglRenderer: profile.webglRenderer,
+      canvasNoise: profile.canvasHash,
+      audioNoise: profile.audioHash,
+    });
+  }, [profile]);
 
   function normalize(raw: string) {
     const t = raw.trim();
@@ -106,12 +234,12 @@ export default function AppSessions() {
                   type="text"
                   value={targetUrl}
                   onChange={e => { setTargetUrl(e.target.value); setUrlError(""); }}
-                  onKeyDown={e => { if (e.key === "Enter" && targetUrl.trim()) { const u = normalize(targetUrl); if (u) window.open(`${BASE}api/proxy?url=${encodeURIComponent(u)}`, "_blank", "noopener,noreferrer"); }}}
+                  onKeyDown={e => { if (e.key === "Enter" && targetUrl.trim()) { const u = normalize(targetUrl); if (u) void openThroughProxy(u, toast, setLocation); }}}
                   placeholder="any geo-blocked site…"
                   className="flex-1 bg-black border border-primary/20 rounded-lg py-2.5 px-3 text-white font-mono text-xs placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-colors"
                 />
                 <button
-                  onClick={() => { const u = normalize(targetUrl); if (!u) { setUrlError("Enter a URL"); return; } window.open(`${BASE}api/proxy?url=${encodeURIComponent(u)}`, "_blank", "noopener,noreferrer"); }}
+                  onClick={() => { const u = normalize(targetUrl); if (!u) { setUrlError("Enter a URL"); return; } void openThroughProxy(u, toast, setLocation); }}
                   disabled={!targetUrl.trim()}
                   className="px-4 py-2.5 bg-primary text-black font-mono font-bold text-[10px] rounded-lg hover:bg-white transition-colors disabled:opacity-40 tracking-wider whitespace-nowrap"
                   style={{ boxShadow: "0 0 10px rgba(57,255,20,0.3)" }}
@@ -143,11 +271,11 @@ export default function AppSessions() {
                 <input
                   type="text"
                   placeholder="enter any site url…"
-                  onKeyDown={e => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value.trim(); if (v) { const u = v.startsWith("http") ? v : "https://" + v; window.open(u, "_blank", "noopener,noreferrer"); (e.target as HTMLInputElement).value = ""; } } }}
+                  onKeyDown={e => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value.trim(); if (v) { void openThroughProxy(v, toast, setLocation); (e.target as HTMLInputElement).value = ""; } } }}
                   className="flex-1 bg-black border border-secondary/20 rounded-lg py-2.5 px-3 text-white font-mono text-xs placeholder:text-white/20 focus:outline-none focus:border-secondary/50 transition-colors"
                 />
                 <button
-                  onClick={e => { const inp = (e.currentTarget.previousElementSibling as HTMLInputElement); const v = inp?.value.trim(); if (v) { const u = v.startsWith("http") ? v : "https://" + v; window.open(u, "_blank", "noopener,noreferrer"); inp.value = ""; } }}
+                  onClick={e => { const inp = (e.currentTarget.previousElementSibling as HTMLInputElement); const v = inp?.value.trim(); if (v) { void openThroughProxy(v, toast, setLocation); inp.value = ""; } }}
                   className="px-4 py-2.5 bg-secondary text-white font-mono font-bold text-[10px] rounded-lg hover:bg-secondary/80 transition-colors tracking-wider whitespace-nowrap"
                   style={{ boxShadow: "0 0 10px rgba(139,92,246,0.3)" }}
                 >OPEN →</button>
@@ -183,11 +311,33 @@ export default function AppSessions() {
                     <label className="flex items-center gap-2 text-[10px] font-mono text-white/40 uppercase tracking-widest">
                       <Zap className="w-3.5 h-3.5" /> Spoofed Fingerprint
                     </label>
-                    <button onClick={() => refetch()} disabled={profileLoading}
-                      className="flex items-center gap-1.5 text-[10px] font-mono text-white/30 hover:text-primary transition-colors border border-white/8 hover:border-primary/30 px-2.5 py-1.5 rounded">
-                      <RefreshCw className={`w-3 h-3 ${profileLoading ? "animate-spin" : ""}`} />
-                      RANDOMIZE
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          // Real rotation: new preset + new sessionId + clear sticky-remote
+                          // for hosts the user has touched recently. Fingerprint refetch
+                          // happens after so the UI shows the new identity.
+                          try {
+                            const recent = JSON.parse(localStorage.getItem("sn_recent_hosts") ?? "[]") as string[];
+                            await fetch(`${BASE}api/session/rotate`, {
+                              method: "POST", headers: { "content-type": "application/json" },
+                              body: JSON.stringify({ regionId: selectedNode || undefined, clearSticky: recent }),
+                            });
+                          } catch { /* advisory */ }
+                          void refetch();
+                          toast({ title: "Rotated", description: "New preset, fresh session id, sticky-upgrade cleared for recent hosts." });
+                        }}
+                        disabled={profileLoading}
+                        className="flex items-center gap-1.5 text-[10px] font-mono text-white/30 hover:text-accent transition-colors border border-white/8 hover:border-accent/30 px-2.5 py-1.5 rounded">
+                        <RefreshCw className="w-3 h-3" />
+                        ROTATE IP
+                      </button>
+                      <button onClick={() => refetch()} disabled={profileLoading}
+                        className="flex items-center gap-1.5 text-[10px] font-mono text-white/30 hover:text-primary transition-colors border border-white/8 hover:border-primary/30 px-2.5 py-1.5 rounded">
+                        <RefreshCw className={`w-3 h-3 ${profileLoading ? "animate-spin" : ""}`} />
+                        RANDOMIZE
+                      </button>
+                    </div>
                   </div>
                   {profile ? (
                     <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
@@ -313,7 +463,7 @@ export default function AppSessions() {
                       {/* Browse button */}
                       <div className="space-y-2 pt-1">
                         <button
-                          onClick={() => window.open(`${BASE}api/proxy?url=${encodeURIComponent(relayResult.targetUrl ?? "")}`, "_blank", "noopener,noreferrer")}
+                          onClick={() => { if (relayResult.targetUrl) void openThroughProxy(relayResult.targetUrl, toast, setLocation); }}
                           className="w-full py-3 bg-primary text-black font-mono font-bold text-xs rounded-lg flex items-center justify-center gap-2 hover:bg-white transition-colors tracking-widest"
                           style={{ boxShadow: "0 0 16px rgba(57,255,20,0.2)" }}>
                           <Eye className="w-3.5 h-3.5" />

@@ -1,8 +1,8 @@
 import { useMutation, type UseMutationResult } from "@tanstack/react-query";
 import { generateMnemonic, mnemonicToSeed } from "@scure/bip39";
-import { wordlist } from "@scure/bip39/wordlists/english";
-import { hmac } from "@noble/hashes/hmac";
-import { sha512 } from "@noble/hashes/sha2";
+import { wordlist } from "@scure/bip39/wordlists/english.js";
+import { hmac } from "@noble/hashes/hmac.js";
+import { sha512 } from "@noble/hashes/sha2.js";
 import * as ed from "@noble/ed25519";
 import bs58 from "bs58";
 

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Share+Tech+Mono&family=VT323&family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -7,7 +7,12 @@
 
 @theme inline {
   --font-sans: 'JetBrains Mono', monospace;
-  --font-display: 'Share Tech Mono', monospace;
+  /* Display = chunky 8-bit pixel face. Use sparingly (hero only) since
+     it's barely legible below ~24px. */
+  --font-display: 'Press Start 2P', 'Share Tech Mono', monospace;
+  /* Pixel terminal face for body labels — VT323 is readable at any size
+     and keeps the 2-bit feel without the brick-wall density of P-Start. */
+  --font-pixel: 'VT323', 'Share Tech Mono', monospace;
   --font-mono: 'JetBrains Mono', monospace;
 
   --color-background: hsl(var(--background));
@@ -46,37 +51,47 @@
   --animate-pulse-glow: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* CYBERPUNK DARK THEME */
+/* JADE TERMINAL THEME — grainy anime jade × Conway pixel-terminal */
 :root {
-  --background: 0 0% 2%;
-  --foreground: 120 100% 90%; /* Very pale green-white */
-  
-  --primary: 110 100% 54%; /* Neon Green #39FF14 */
-  --primary-foreground: 0 0% 0%;
-  --primary-border: 110 100% 30%;
-  
-  --secondary: 258 90% 66%; /* Neon Purple #8B5CF6 */
-  --secondary-foreground: 0 0% 100%;
-  --secondary-border: 258 90% 40%;
-  
-  --accent: 180 100% 50%; /* Cyan accent */
-  --accent-foreground: 0 0% 0%;
-  
-  --card: 0 0% 4%;
-  --card-foreground: 120 100% 90%;
-  --card-border: 110 100% 54% / 0.15;
-  
-  --border: 0 0% 12%;
-  --input: 0 0% 8%;
-  --ring: 110 100% 54%;
-  
-  --muted: 0 0% 8%;
-  --muted-foreground: 120 20% 50%;
-  
-  --destructive: 0 100% 50%;
+  --background: 168 12% 4%;        /* near-black with a faint jade cast */
+  --foreground: 156 30% 88%;       /* pale jade off-white */
+
+  /* Jade green primary (#3E7C6A grainy variant) */
+  --primary: 162 33% 36%;
+  --primary-foreground: 168 30% 6%;
+  --primary-border: 162 40% 24%;
+
+  /* Highlight / glow accent (#6FAF9B) */
+  --accent: 158 28% 56%;
+  --accent-foreground: 168 30% 6%;
+
+  /* Deep shadow jade (#1E4D40) for outlines & depth */
+  --secondary: 168 45% 21%;
+  --secondary-foreground: 156 40% 90%;
+  --secondary-border: 168 45% 14%;
+
+  --card: 168 14% 6%;
+  --card-foreground: 156 30% 88%;
+  --card-border: 162 33% 36% / 0.18;
+
+  --border: 168 12% 12%;
+  --input: 168 14% 8%;
+  --ring: 158 28% 56%;
+
+  --muted: 168 12% 9%;
+  --muted-foreground: 156 12% 50%;
+
+  --destructive: 0 70% 52%;
   --destructive-foreground: 0 0% 100%;
 
   --radius: 0.25rem;
+
+  /* Core jade tokens for direct use (logos, glows). Mirror the brand
+     swatches so designers can pull the same hex from CSS. */
+  --jade-core: #2F6F5E;
+  --jade-grain: #3E7C6A;
+  --jade-shadow: #1E4D40;
+  --jade-glow: #6FAF9B;
 
   color-scheme: dark;
 }
@@ -88,19 +103,99 @@
 
   body {
     @apply font-mono antialiased bg-background text-foreground overflow-x-hidden selection:bg-primary/30 selection:text-primary;
-    background-image: 
-      radial-gradient(circle at 50% 0%, hsl(var(--primary) / 0.05) 0%, transparent 50%),
-      radial-gradient(circle at 100% 100%, hsl(var(--secondary) / 0.05) 0%, transparent 50%);
-    background-attachment: fixed;
+    /* Jade grain: soft top + bottom glows + an SVG fractal noise overlay
+       at 2-4% opacity (the palette spec calls for this). The noise is a
+       data: URI so it adds zero network cost. */
+    background-image:
+      radial-gradient(circle at 50% 0%, hsl(var(--primary) / 0.06) 0%, transparent 55%),
+      radial-gradient(circle at 100% 100%, hsl(var(--accent) / 0.05) 0%, transparent 50%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.18 0 0 0 0 0.49 0 0 0 0 0.42 0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    background-attachment: fixed, fixed, fixed;
+    background-size: auto, auto, 220px 220px;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display tracking-tight text-white uppercase;
+    @apply tracking-tight uppercase;
+    /* Default heading is mono not display — display is reserved for the
+       hero pixel-art wordmark. Color comes from the jade ombre utility
+       below; no more white juxtaposed against an accent colour. */
+    font-family: 'JetBrains Mono', monospace;
+    color: #6FAF9B;
     text-shadow: 0 0 10px hsl(var(--primary) / 0.3);
   }
 }
 
 @layer utilities {
+  /* Jade ombre — single-palette gradient text. Smooth interpolation;
+     fine for non-pixel headlines. Don't use on pixel-crisp wordmarks —
+     it blurs the glyph edges; use .text-jade-pixel-bands instead. */
+  .text-jade-ombre {
+    background: linear-gradient(180deg, #B6E0CF 0%, #6FAF9B 38%, #3E7C6A 72%, #1E4D40 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 18px rgba(111,175,155,0.45)) drop-shadow(0 0 38px rgba(47,111,94,0.25));
+  }
+  /* Hard-banded ombre — zero-distance color stops produce sharp
+     horizontal palette swaps inside each glyph, the way real 8-bit
+     games shaded text. No interpolation = pixel edges stay crisp.
+     No drop-shadow filter (it would re-blur the glyphs); a pseudo
+     glow behind the wordmark handles ambient bloom. */
+  .text-jade-pixel-bands {
+    background: linear-gradient(
+      180deg,
+      #B6E0CF 0%,  #B6E0CF 22%,
+      #6FAF9B 22%, #6FAF9B 52%,
+      #3E7C6A 52%, #3E7C6A 80%,
+      #1E4D40 80%, #1E4D40 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+  /* Optional ambient glow behind a pixel-crisp wordmark — sits in a
+     ::before that doesn't touch the glyph itself, so pixels stay hard. */
+  .pixel-glow {
+    position: relative;
+    isolation: isolate;
+  }
+  .pixel-glow::before {
+    content: "";
+    position: absolute;
+    inset: -10% -6%;
+    z-index: -1;
+    background: radial-gradient(closest-side, rgba(111,175,155,0.35), rgba(47,111,94,0.18) 55%, transparent 75%);
+    filter: blur(28px);
+    pointer-events: none;
+  }
+  /* Single-tone variant for body labels — no gradient, just jade glow. */
+  .text-jade {
+    color: #6FAF9B;
+    text-shadow: 0 0 10px rgba(111,175,155,0.35);
+  }
+  /* Crisp 8-bit pixel rendering for the hero wordmark. Disables font
+     smoothing so the Press Start 2P glyphs read as actual pixels, not
+     antialiased blurs. */
+  .pixel-crisp {
+    font-family: var(--font-display);
+    /* Force the renderer to drop hinting/subpixel AA so Press Start 2P's
+       glyph corners stay angular. text-rendering: optimizeSpeed turns
+       off ligatures + kerning + AA at the layout layer. The font-smooth
+       hints turn it off at the raster layer. Together they read as
+       genuine 8-bit. */
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: none;
+    font-smooth: never;
+    text-rendering: optimizeSpeed;
+    image-rendering: pixelated;
+    letter-spacing: 0.04em;
+  }
+  .font-pixel {
+    font-family: var(--font-pixel);
+  }
+
   .text-glow {
     text-shadow: 0 0 10px hsl(var(--primary) / 0.7), 0 0 20px hsl(var(--primary) / 0.5);
   }
@@ -155,4 +250,61 @@
 @keyframes pulse-glow {
   0%, 100% { opacity: 1; filter: brightness(1); }
   50% { opacity: 0.8; filter: brightness(1.5); }
+}
+
+/* ── Logo orbit + HUD + conic ring animations ────────────────────────── */
+@property --ang {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes logo-orbit-cw  { from { transform: rotate(0deg); }   to { transform: rotate(360deg); } }
+@keyframes logo-orbit-ccw { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+@keyframes logo-pulse {
+  0%, 100% { r: 1.4; opacity: 0.5; }
+  50%      { r: 3.2; opacity: 1; }
+}
+@keyframes logo-scan {
+  from { background-position: 0 0; }
+  to   { background-position: 0 64px; }
+}
+
+@keyframes hud-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes conic-spin { to { --ang: 360deg; } }
+@keyframes stack-rot  { to { transform: rotate(360deg); } }
+
+.conic-ring {
+  /* The gradient itself is set inline; this rule animates the angle. */
+  animation: conic-spin 8s linear infinite;
+}
+.group:hover > .conic-ring {
+  animation-duration: 3s;
+}
+
+/* Subtle CRT scanlines available as a utility on hero containers. */
+.scanlines::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(111, 175, 155, 0) 0,
+    rgba(111, 175, 155, 0) 2px,
+    rgba(111, 175, 155, 0.04) 2px,
+    rgba(111, 175, 155, 0.04) 3px
+  );
+  mix-blend-mode: overlay;
+  opacity: 0.6;
+}
+
+/* CTA shimmer sweep — reusable pattern for big buttons. */
+@keyframes cta-sweep {
+  0%   { transform: translateX(-120%) skewX(-20deg); }
+  100% { transform: translateX(220%)  skewX(-20deg); }
 }

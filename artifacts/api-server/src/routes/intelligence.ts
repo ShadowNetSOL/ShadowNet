@@ -3,19 +3,42 @@ import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import * as cheerio from "cheerio";
 import OpenAI from "openai";
 import rateLimit from "express-rate-limit";
-import { memo, cacheGet, cacheSet } from "../lib/cache.js";
+import {
+  getUserByUsername,
+  getUserTweets,
+  getAllUserTweets,
+  getFollowers,
+  isTwitterConfigured,
+} from "../lib/twitterApi";
+import { extractAddresses, type Chain } from "../lib/addressExtract";
+import {
+  cacheGet, cachePut, cacheKey,
+  recordUsername, previousNamesFor,
+} from "../lib/xScanCache";
 import { pushScore, getScoreHistory, recordPurchases, getPurchases } from "../lib/history.js";
 import { classifyArchetype, buildPerMintStats, summarisePnl } from "../lib/wallet-archetype.js";
 import { detectScamPatterns, detectAntiGaming, detectStructuralRisk, applyTrustAdjustments } from "../lib/github-trust.js";
 import { linkWalletMint, linkRepoMint, getCrossSignalsForWallet, getCrossSignalsForRepo, maskWallet } from "../lib/cross-signal.js";
+import { cacheGet as memCacheGet, cacheSet } from "../lib/cache.js";
 
 const router = Router();
 
-// ── OpenAI client (Replit AI Integrations proxy) ─────────────────────────────
+// ── OpenAI client ────────────────────────────────────────────────────────────
+// Accepts OPENAI_API_KEY (standard) and optional OPENAI_BASE_URL (for OpenRouter
+// or other OpenAI-compatible providers). Legacy AI_INTEGRATIONS_* env vars are
+// honoured as fallbacks so existing Replit deployments keep working.
+const AI_API_KEY =
+  process.env.OPENAI_API_KEY ?? process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+const AI_BASE_URL =
+  process.env.OPENAI_BASE_URL ?? process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+const AI_MODEL = process.env.AI_MODEL ?? "gpt-5";
+
 const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+  apiKey: AI_API_KEY,
+  baseURL: AI_BASE_URL,
 });
+
+const aiConfigured = Boolean(AI_API_KEY);
 
 // ── GitHub Scanner per-endpoint rate limit (AI calls are expensive) ──────────
 const githubScanLimiter = rateLimit({
@@ -28,18 +51,36 @@ const githubScanLimiter = rateLimit({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-// Tiered RPC endpoints:
-//   1. SOLANA_RPC_URL env var (e.g. Helius/QuickNode) — preferred when set
-//   2. publicnode.com — free, reliable, supports getParsedTransactions
-//   3. mainnet-beta — fallback only; rate-limits parsed-tx calls aggressively
-const RPC_ENDPOINTS: string[] = [
+// ── Solana RPC: tiered failover ──────────────────────────────────────────────
+// Priority order:
+//   1. SOLANA_RPC_URL env (typically Helius — supports getParsedTransaction at scale)
+//   2. solana-mainnet.publicnode.com
+//   3. api.mainnet-beta.solana.com (last resort — heavily rate-limited)
+const RPC_URLS: string[] = [
   process.env.SOLANA_RPC_URL,
-  "https://solana-rpc.publicnode.com",
+  "https://solana-mainnet.publicnode.com",
   "https://api.mainnet-beta.solana.com",
-].filter((u): u is string => Boolean(u));
+].filter((u): u is string => typeof u === "string" && u.length > 0);
 
-const connections = RPC_ENDPOINTS.map(url => new Connection(url, "confirmed"));
+const connections: Connection[] = RPC_URLS.map(
+  (url) => new Connection(url, "confirmed"),
+);
 const connection = connections[0];
+
+// Run an async op against each connection in priority order until one succeeds.
+async function withRpcFailover<T>(
+  op: (c: Connection) => Promise<T>,
+): Promise<T> {
+  let lastErr: unknown;
+  for (const c of connections) {
+    try {
+      return await op(c);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr ?? new Error("All RPC endpoints failed");
+}
 
 // Solana address regex: base58, 32–44 chars
 const SOL_ADDR_RE = /\b([1-9A-HJ-NP-Za-km-z]{32,44})\b/g;
@@ -59,52 +100,31 @@ function isLikelySolanaAddress(addr: string): boolean {
   try { new PublicKey(addr); return true; } catch { return false; }
 }
 
-// Sanitise externally-supplied strings (DexScreener token names/symbols can be hostile).
-function safeStr(s: unknown, max: number): string {
-  if (typeof s !== "string") return "";
-  // Strip control chars + zero-width + RTL overrides; clip length
-  const cleaned = s.replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202F\u2060-\u206F]/g, "").trim();
-  return cleaned.length > max ? cleaned.slice(0, max - 1) + "…" : cleaned;
-}
-
 async function getSolPrice(): Promise<number> {
-  return memo("solPrice", 60_000, async () => {
-    try {
-      const r = await fetch("https://price.jup.ag/v6/price?ids=SOL", { signal: AbortSignal.timeout(4000) });
-      const d = await r.json() as { data?: { SOL?: { price: number } } };
-      return d.data?.SOL?.price ?? 0;
-    } catch { return 0; }
-  });
+  try {
+    const r = await fetch("https://price.jup.ag/v6/price?ids=SOL", { signal: AbortSignal.timeout(4000) });
+    const d = await r.json() as { data?: { SOL?: { price: number } } };
+    return d.data?.SOL?.price ?? 0;
+  } catch { return 0; }
 }
 
 async function getTokenMetadata(mints: string[]): Promise<Record<string, { symbol: string; priceUsd: number; name: string }>> {
   const result: Record<string, { symbol: string; priceUsd: number; name: string }> = {};
   if (mints.length === 0) return result;
-
-  // Cached per-mint with 5min TTL — collect cache hits, then fetch only the rest.
-  const toFetch: string[] = [];
-  for (const m of mints) {
-    const hit = cacheGet<{ symbol: string; priceUsd: number; name: string }>(`tokenMeta:${m}`);
-    if (hit) result[m] = hit;
-    else toFetch.push(m);
-  }
-  if (toFetch.length === 0) return result;
-
+  // DexScreener batch lookup
   try {
-    const chunk = toFetch.slice(0, 30).join(",");
+    const chunk = mints.slice(0, 30).join(",");
     const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${chunk}`, { signal: AbortSignal.timeout(5000) });
-    const d = await r.json() as { pairs?: Array<{ baseToken?: { address?: unknown; symbol?: unknown; name?: unknown }; priceUsd?: unknown }> };
-    if (Array.isArray(d.pairs)) {
+    const d = await r.json() as { pairs?: Array<{ baseToken: { address: string; symbol: string; name: string }; priceUsd: string }> };
+    if (d.pairs) {
       for (const pair of d.pairs) {
-        const addr = typeof pair.baseToken?.address === "string" ? pair.baseToken.address : null;
-        if (!addr || result[addr]) continue;
-        const entry = {
-          symbol: safeStr(pair.baseToken?.symbol, 24) || addr.slice(0, 6) + "…",
-          name: safeStr(pair.baseToken?.name, 60) || "Unknown",
-          priceUsd: typeof pair.priceUsd === "string" ? (parseFloat(pair.priceUsd) || 0) : 0,
-        };
-        result[addr] = entry;
-        cacheSet(`tokenMeta:${addr}`, entry, 5 * 60_000);
+        if (!result[pair.baseToken.address]) {
+          result[pair.baseToken.address] = {
+            symbol: pair.baseToken.symbol,
+            name: pair.baseToken.name,
+            priceUsd: parseFloat(pair.priceUsd) || 0,
+          };
+        }
       }
     }
   } catch {}
@@ -175,14 +195,9 @@ function heuristicWalletSummary(s: WalletStats): string {
 }
 
 async function aiWalletSummary(s: WalletStats): Promise<string> {
-  if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY || !process.env.AI_INTEGRATIONS_OPENAI_BASE_URL) {
+  if (!aiConfigured) {
     return heuristicWalletSummary(s);
   }
-  // Cache by coarse-grained stats so repeat scans don't re-spend OpenAI credits.
-  const cacheKey = `aiWalletSummary:${s.address}:${s.score}:${s.txCount}:${s.tokenCount}:${Math.round(s.totalUsd)}`;
-  const hit = cacheGet<string>(cacheKey);
-  if (hit) return hit;
-
   const facts = [
     `Address: ${s.address}`,
     `SOL balance: ${s.solBalance.toFixed(4)}`,
@@ -209,7 +224,7 @@ Return ONLY the summary text, no JSON, no quotes, no markdown.`;
   try {
     const completion = await Promise.race([
       openai.chat.completions.create({
-        model: "gpt-5.4",
+        model: AI_MODEL,
         max_completion_tokens: 200,
         messages: [
           { role: "system", content: "You write concise factual summaries of on-chain wallet activity. Output plain text only." },
@@ -220,15 +235,14 @@ Return ONLY the summary text, no JSON, no quotes, no markdown.`;
     ]);
     const text = (completion.choices[0]?.message?.content ?? "").trim();
     if (text.length < 10) return heuristicWalletSummary(s);
-    const out = clipStr(text, 400);
-    cacheSet(cacheKey, out, 5 * 60_000);
-    return out;
+    return clipStr(text, 400);
   } catch {
     return heuristicWalletSummary(s);
   }
 }
 
 // POST /api/intelligence/wallet
+
 router.post("/intelligence/wallet", async (req, res) => {
   const { address } = req.body as { address?: string };
   if (!address?.trim()) return void res.status(400).json({ error: "Address required" });
@@ -411,6 +425,7 @@ async function fetchParsedBatched(signatures: string[], _chunkSize = 0) {
 // POST /api/intelligence/wallet/onchain
 //   Body: { address: string, limit?: number }
 //   Returns { devTokens, activity, scannedTxCount }
+
 router.post("/intelligence/wallet/onchain", async (req, res) => {
   const { address, limit } = req.body as { address?: string; limit?: number };
   if (!address?.trim()) return void res.status(400).json({ error: "Address required" });
@@ -806,103 +821,149 @@ async function getWaybackHistory(handle: string): Promise<{
 }
 
 // POST /api/intelligence/x-ca
+
 router.post("/intelligence/x-ca", async (req, res) => {
   const { username } = req.body as { username?: string };
   if (!username?.trim()) return void res.status(400).json({ error: "Username required" });
 
   const handle = username.trim().replace(/^@/, "");
 
+  // Cache hit → return immediately (10-min TTL). This is what makes
+  // repeat scans of the same profile feel instant.
+  const cached = cacheGet<unknown>(cacheKey("xca", handle));
+  if (cached) {
+    return void res.json({ ...(cached as object), cached: true });
+  }
+
+  if (!isTwitterConfigured()) {
+    return void res.status(503).json({
+      error: "X scanning needs a Twitter API v2 Bearer Token. Set TWITTER_API_BEARER on the server to enable.",
+    });
+  }
+
   try {
-    // Run nitter scrape and Wayback history in parallel
-    const [html, wayback] = await Promise.all([
-      fetchNitter(`/${handle}`),
-      getWaybackHistory(handle),
+    // 1. Profile lookup. We need the user id for subsequent calls.
+    const userRes = await getUserByUsername(handle);
+    if (!userRes.ok || !userRes.data) {
+      const status = userRes.reason === "not_found" ? 404
+                   : userRes.reason === "rate_limited" ? 429
+                   : userRes.reason === "auth_failed" ? 502 : 503;
+      return void res.status(status).json({ error: userRes.detail ?? "Could not load X profile." });
+    }
+    const user = userRes.data;
+
+    // 2. Self-tracked username history. Every scan records the (user_id,
+    //    username) pair. If the same id has shown up under a different
+    //    name before, surface the prior name(s) — this catches actual
+    //    rename events, which is the thing Wayback couldn't.
+    recordUsername(user.id, user.username);
+    const selfTrackedPrev = previousNamesFor(user.id, user.username);
+
+    // 3. Walk the timeline with pagination. Hard cap = 1000 tweets so
+    //    a single user can't burn the API quota; truncated flag tells
+    //    the UI whether we hit the cap.
+    const [walked, wayback] = await Promise.all([
+      getAllUserTweets(user.id, { capPages: 10, capTweets: 1000 }),
+      getWaybackHistory(handle), // kept as belt-and-braces; sparse but free
     ]);
 
-    if (!html) return void res.status(503).json({ error: "Could not reach Twitter mirror. Try again shortly." });
-
-    const $ = cheerio.load(html);
-
-    // Profile info
-    const displayName = $(".profile-card-fullname").text().trim() || handle;
-    const followersText = $(".followers .profile-stat-num").text().trim().replace(/,/g, "");
-    const followers = parseInt(followersText) || 0;
-    const bio = $(".profile-bio p").text().trim();
-    const verified = $(".profile-card-fullname .verified-icon").length > 0;
-
-    // Extract account creation date if nitter exposes it
-    const joinDateText = $(".profile-card .profile-joindate").text().trim() ||
-      $(".profile-joindate").text().trim() ||
-      $(".join-date").text().trim() || null;
-
-    // Extract user ID if nitter includes it (some instances expose it)
-    let userId: string | null = null;
-    $("a[href*='intent/user']").each((_, el) => {
-      const href = $(el).attr("href") ?? "";
-      const m = href.match(/user_id=(\d+)/);
-      if (m) userId = m[1];
-    });
-
-    // Collect CAs from tweets
-    const contractAddresses: Array<{
+    // 4. Multi-chain address extraction. Each match comes back tagged
+    //    with the chain ("sol" | "eth" | "btc" | "tron" | "ton") and
+    //    a kind hint ("ca" | "wallet" | "unknown") so the UI can split
+    //    contracts vs wallets in the panel.
+    interface Found {
+      chain: Chain;
       address: string;
+      kind: "ca" | "wallet" | "unknown";
       postedAt: string | null;
       tweetText: string;
       tweetId: string;
-    }> = [];
-
+    }
     const seen = new Set<string>();
-
-    $(".timeline-item").each((_, el) => {
-      const tweetText = $(el).find(".tweet-content").text();
-      const dateStr = $(el).find(".tweet-date a").attr("title") ?? null;
-      const tweetHref = $(el).find(".tweet-date a").attr("href") ?? "";
-      const tweetId = tweetHref.split("/").pop() ?? "";
-
-      const matches = tweetText.match(SOL_ADDR_RE) ?? [];
-      for (const addr of matches) {
-        if (isLikelySolanaAddress(addr) && !seen.has(addr)) {
-          seen.add(addr);
-          contractAddresses.push({
-            address: addr,
-            postedAt: dateStr,
-            tweetText: tweetText.slice(0, 200),
-            tweetId,
-          });
-        }
+    const allAddresses: Found[] = [];
+    for (const t of walked.tweets) {
+      const hits = extractAddresses(t.text);
+      for (const h of hits) {
+        const key = `${h.chain}:${h.address}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        allAddresses.push({
+          chain: h.chain,
+          address: h.address,
+          kind: h.kind,
+          postedAt: t.created_at ?? null,
+          tweetText: t.text.slice(0, 220),
+          tweetId: t.id,
+        });
       }
-    });
+    }
 
-    res.json({
-      username: handle,
-      displayName,
-      followers,
-      bio,
-      verified,
-      joinDate: joinDateText,
-      userId,
+    // Backwards-compatible fields (Solana-only `contractAddresses`) for
+    // any existing client; new clients should read `addresses`.
+    const contractAddresses = allAddresses
+      .filter((a) => a.chain === "sol")
+      .map(({ address, postedAt, tweetText, tweetId }) => ({ address, postedAt, tweetText, tweetId }));
+
+    const payload = {
+      username: user.username,
+      displayName: user.name,
+      followers: user.public_metrics?.followers_count ?? 0,
+      bio: user.description ?? "",
+      verified: !!user.verified,
+      joinDate: user.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null,
+      userId: user.id,
       caCount: contractAddresses.length,
       contractAddresses,
+      addresses: allAddresses,                     // multi-chain, the new field
+      addressesByChain: countBy(allAddresses, (a) => a.chain),
       usernameHistory: {
         currentUsername: handle,
+        // Self-tracked rename events take priority — these are real,
+        // captured at scan time. Wayback fallback supplies first/last
+        // archive timestamps when we have no internal history yet.
+        previousUsernames: selfTrackedPrev.map((r) => ({
+          username: r.username,
+          firstSeen: new Date(r.firstSeen).toISOString(),
+          lastSeen: new Date(r.lastSeen).toISOString(),
+        })),
         firstSeen: wayback.firstSeen,
         lastSeen: wayback.lastSeen,
         snapshotCount: wayback.snapshotCount,
         possiblePreviousNames: wayback.possiblePreviousNames,
-        note: wayback.snapshotCount === 0
-          ? "No archive records found for this username. The account may be new or the username may have been recently changed."
-          : wayback.possiblePreviousNames.length > 0
-            ? "Previous usernames detected via web archive redirect history."
-            : "Username appears consistent in web archive records. No redirects detected suggesting a name change.",
+        note: selfTrackedPrev.length > 0
+          ? `${selfTrackedPrev.length} prior handle${selfTrackedPrev.length > 1 ? "s" : ""} tracked since ShadowNet started indexing this account.`
+          : wayback.snapshotCount === 0
+            ? "No archive records and no rename history yet. Re-scan after username changes to capture history going forward."
+            : wayback.possiblePreviousNames.length > 0
+              ? "Previous usernames detected via web archive redirect history (low confidence)."
+              : "Username appears consistent in archive records.",
       },
-    });
+      tweetsScanned: walked.tweets.length,
+      tweetsTruncated: walked.truncated,
+      pagesFetched: walked.pagesFetched,
+      tweetsError: walked.reason ? (walked.detail ?? walked.reason) : null,
+      cached: false,
+    };
+
+    cachePut(cacheKey("xca", handle), payload);
+    res.json(payload);
   } catch (err) {
     console.error("x-ca error", err);
-    res.status(500).json({ error: "Scraping failed. Mirror may be unavailable." });
+    res.status(500).json({ error: "X API call failed. Try again shortly." });
   }
 });
 
+function countBy<T, K extends string>(arr: T[], key: (item: T) => K): Record<K, number> {
+  const out = {} as Record<K, number>;
+  for (const x of arr) {
+    const k = key(x);
+    out[k] = (out[k] ?? 0) + 1;
+  }
+  return out;
+}
+
 // POST /api/intelligence/smart-followers
+
 router.post("/intelligence/smart-followers", async (req, res) => {
   const { username } = req.body as { username?: string };
   if (!username?.trim()) return void res.status(400).json({ error: "Username required" });
@@ -910,73 +971,92 @@ router.post("/intelligence/smart-followers", async (req, res) => {
   const handle = username.trim().replace(/^@/, "");
 
   try {
-    const html = await fetchNitter(`/${handle}`);
-    if (!html) return void res.status(503).json({ error: "Could not reach Twitter mirror." });
+    const cached = cacheGet<unknown>(cacheKey("smartf", handle));
+    if (cached) return void res.json({ ...(cached as object), cached: true });
 
-    const $ = cheerio.load(html);
-    const displayName = $(".profile-card-fullname").text().trim() || handle;
-    const followersText = $(".followers .profile-stat-num").text().trim().replace(/,/g, "");
-    const followers = parseInt(followersText) || 0;
-    const followingText = $(".following .profile-stat-num").text().trim().replace(/,/g, "");
-    const following = parseInt(followingText) || 0;
+    if (!isTwitterConfigured()) {
+      return void res.status(503).json({
+        error: "Smart-follower detection needs a Twitter API v2 Bearer Token. Set TWITTER_API_BEARER on the server to enable.",
+        smartFollowers: [], total: 0,
+      });
+    }
 
-    // Known smart-money / alpha accounts in crypto Twitter (curated list)
-    const KNOWN_SMART_ACCOUNTS = [
-      { username: "cobie", displayName: "Cobie", tags: ["Alpha", "OG Trader"], followers: 820000 },
-      { username: "DegenSpartan", displayName: "Degen Spartan", tags: ["DeFi", "Whale"], followers: 310000 },
-      { username: "lookonchain", displayName: "Lookonchain", tags: ["On-chain", "Analyst"], followers: 720000 },
-      { username: "zachxbt", displayName: "ZachXBT", tags: ["Investigator", "Alpha"], followers: 680000 },
-      { username: "SolanaFloor", displayName: "Solana Floor", tags: ["Solana", "NFT"], followers: 180000 },
-      { username: "blknoiz06", displayName: "Ansem", tags: ["Solana", "Bull"], followers: 530000 },
-      { username: "0xMert_", displayName: "Mert | Helius", tags: ["Builder", "Solana"], followers: 120000 },
-      { username: "aeyakovenko", displayName: "toly", tags: ["Solana Founder"], followers: 410000 },
-      { username: "rajgokal", displayName: "raj gokal", tags: ["Solana Founder"], followers: 195000 },
-      { username: "hsakatrades", displayName: "hsaka", tags: ["TA", "Trader"], followers: 420000 },
-      { username: "trading_axe", displayName: "Axe", tags: ["Solana", "Degen"], followers: 95000 },
-      { username: "inversebrah", displayName: "Inverse Brah", tags: ["Degen", "Alpha"], followers: 180000 },
-      { username: "CryptoGodJohn", displayName: "John", tags: ["Calls", "Alpha"], followers: 210000 },
-      { username: "punk9059", displayName: "punk9059", tags: ["NFT", "OG"], followers: 88000 },
-      { username: "redphonecrypto", displayName: "Red Phone", tags: ["Intelligence", "Alpha"], followers: 145000 },
-    ];
+    // Curated crypto-alpha allowlist. A follower counts as "smart" if
+    // their handle is in this set OR their public_metrics + bio match
+    // an alpha-account heuristic (large follower count + crypto/Solana
+    // signal in the bio). Expanded list — add to it freely; the dataset
+    // is the moat.
+    const ALPHA_HANDLES = new Set([
+      // OG traders / commentators
+      "cobie", "DegenSpartan", "hsakatrades", "inversebrah", "tier10k",
+      "AltcoinGordon", "CryptoCapo_", "PostyXBT", "smileycapital",
+      // On-chain analysts / investigators
+      "lookonchain", "zachxbt", "MustStopMurad", "DefiIgnas", "ChrisBlec",
+      "TheDeFiPlebs", "tayvano_", "nanexcool",
+      // Solana ecosystem
+      "aeyakovenko", "rajgokal", "0xMert_", "blknoiz06", "SolanaFloor",
+      "trading_axe", "kelxyz_", "0xferg", "icebergy_", "shaaa256",
+      "loopifyyy", "redphonecrypto", "CryptoGodJohn", "punk9059",
+      "kookcapitalllc", "ZAGABOND", "funny_sol", "themooncarl",
+      // EVM / DeFi
+      "CL207", "Tetranode", "AndreCronjeTech", "stani.lens", "haydenzadams",
+      "VitalikButerin", "DCFGod", "0xSisyphus", "DefiantNews",
+      // Memecoin / pump-related
+      "alpha_pls", "pumpdotfun", "AnsemDoit", "shitcoinrescue",
+    ].map((s) => s.toLowerCase()));
 
-    // Since nitter doesn't expose follower lists to scraping, we simulate
-    // a smart follower check by checking if the profile follows/is followed by known accounts.
-    // In production this requires Twitter API v2.
-    // We return partial info with a note about API requirements.
+    const ALPHA_BIO_RE = /\b(solana|degen|alpha|on-chain|onchain|memecoin|airdrop|founder|trader|whale|kol|alpha\s*caller)\b/i;
 
-    // Heuristic scoring based on ratio / account size
-    const ratio = following > 0 ? followers / following : 0;
-    let smartScore = 0;
-    if (ratio > 5) smartScore += 25;
-    if (ratio > 20) smartScore += 20;
-    if (followers > 10000) smartScore += 15;
-    if (followers > 100000) smartScore += 20;
-    if (followers > 500000) smartScore += 20;
-    smartScore = Math.min(smartScore, 100);
+    const userRes = await getUserByUsername(handle);
+    if (!userRes.ok || !userRes.data) {
+      const status = userRes.reason === "not_found" ? 404 : 502;
+      return void res.status(status).json({ error: userRes.detail ?? "Could not load X profile.", smartFollowers: [], total: 0 });
+    }
+    const user = userRes.data;
 
-    // Return a subset of known accounts as example (demo mode)
-    const sampleSmartFollowers = KNOWN_SMART_ACCOUNTS
-      .sort(() => Math.random() - 0.5)
-      .slice(0, Math.floor(Math.random() * 5) + 3);
+    const followersRes = await getFollowers(user.id, 1000);
+    if (!followersRes.ok || !followersRes.data) {
+      return void res.status(502).json({
+        error: followersRes.detail ?? "Could not load followers list.",
+        smartFollowers: [], total: 0,
+      });
+    }
 
-    res.json({
+    const smartFollowers = followersRes.data
+      .map((f) => {
+        const handleLc = f.username.toLowerCase();
+        const isAlpha = ALPHA_HANDLES.has(handleLc);
+        const fc = f.public_metrics?.followers_count ?? 0;
+        const bioHit = !!(f.description && ALPHA_BIO_RE.test(f.description));
+        const isLargeAlpha = fc >= 50_000 && bioHit;
+        if (!isAlpha && !isLargeAlpha) return null;
+        const score = isAlpha ? 100 : Math.min(99, Math.round(40 + Math.log10(Math.max(10, fc)) * 8 + (bioHit ? 10 : 0)));
+        return {
+          username: f.username,
+          displayName: f.name,
+          followers: fc,
+          score,
+          reason: isAlpha ? "curated_alpha" : "large_account_with_crypto_bio",
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a, b) => b.score - a.score);
+
+    const payload = {
       username: handle,
-      displayName,
-      followers,
-      following,
-      ratio: Math.round(ratio * 10) / 10,
-      smartScore,
-      smartFollowerCount: sampleSmartFollowers.length,
-      totalEstimated: Math.floor(followers * (smartScore / 100) * 0.1),
-      smartFollowers: sampleSmartFollowers,
-      note: "Smart follower detection requires Twitter API v2. Showing known alpha accounts for demo. Add your API key to unlock full analysis.",
-      requiresApiKey: true,
-    });
+      smartFollowers,
+      total: smartFollowers.length,
+      scannedFollowers: followersRes.data.length,
+      cached: false,
+    };
+    cachePut(cacheKey("smartf", handle), payload);
+    res.json(payload);
   } catch (err) {
     console.error("smart-followers error", err);
-    res.status(500).json({ error: "Analysis failed." });
+    res.status(500).json({ error: "Analysis failed.", smartFollowers: [], total: 0 });
   }
 });
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GITHUB REPO SCANNER
@@ -1038,7 +1118,7 @@ async function ghFetch(path: string, init?: RequestInit) {
 // Cached JSON GET — only used for endpoints whose results are stable for minutes.
 async function ghJsonCached<T>(path: string, ttlMs: number): Promise<T | null> {
   const key = `gh:${path}`;
-  const hit = cacheGet<T>(key);
+  const hit = memCacheGet<T>(key);
   if (hit !== undefined) return hit;
   try {
     const r = await ghFetch(path);
@@ -1379,6 +1459,7 @@ Return JSON only, no markdown fences.`;
   return result;
 }
 
+
 router.post("/intelligence/github-scan", githubScanLimiter, async (req, res) => {
   // Override the 10s app-wide timeout — AI analysis can take 20-30s.
   res.setTimeout(60_000, () => {
@@ -1582,5 +1663,6 @@ router.post("/intelligence/github-scan", githubScanLimiter, async (req, res) => 
     res.status(500).json({ error: "Scan failed. Check the URL and try again." });
   }
 });
+
 
 export default router;

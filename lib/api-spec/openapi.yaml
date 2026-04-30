@@ -13,6 +13,8 @@ tags:
     description: Relay network operations
   - name: session
     description: Stealth session management
+  - name: intelligence
+    description: On-chain & social intelligence scanners
 paths:
   /healthz:
     get:
@@ -101,6 +103,146 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StealthSession"
+
+  /intelligence/x:
+    post:
+      operationId: scanXAccount
+      tags: [intelligence]
+      summary: Unified X account intelligence scan
+      description: |
+        Single round-trip scanner that fans out to the underlying x-ca and
+        smart-followers calls in parallel and returns both sections plus
+        per-section error info. Profile is the primary section — if it
+        fails the response status mirrors that failure (404 / 429 / 503).
+        If smart-followers alone fails, the response is still 200 and
+        `errors.smartFollowers` is populated.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/XScanRequest"
+      responses:
+        "200":
+          description: Scan complete (may include partial-failure section)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/XScanResponse"
+        "404":
+          description: X username not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: |
+            X API rate limit reached. The `Retry-After` response header and
+            the `retryAfter` field in the body both indicate how many seconds
+            to wait before retrying.
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Seconds until next scan is allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: X API not configured (TWITTER_API_BEARER missing)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /intelligence/x-ca:
+    post:
+      operationId: scanXContractAddresses
+      tags: [intelligence]
+      summary: Scan an X account for posted contract addresses
+      description: |
+        Legacy endpoint kept for backwards compatibility. New clients should
+        call `/intelligence/x` which wraps this plus smart-followers in one
+        round-trip. Walks the user's recent timeline (up to 1000 tweets) and
+        extracts SOL/EVM/BTC/TRON/TON addresses.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/XScanRequest"
+      responses:
+        "200":
+          description: Contract address scan result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/XCaResult"
+        "404":
+          description: X username not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: X API rate limit reached
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: X API not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /intelligence/smart-followers:
+    post:
+      operationId: scanSmartFollowers
+      tags: [intelligence]
+      summary: Scan an X account for "smart" (alpha) followers
+      description: |
+        Legacy endpoint kept for backwards compatibility. New clients should
+        call `/intelligence/x`. Filters the user's followers list by a
+        curated alpha allowlist and a follower-count + crypto-bio heuristic.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/XScanRequest"
+      responses:
+        "200":
+          description: Smart followers list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmartFollowersResult"
+        "404":
+          description: X username not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: X API rate limit reached
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: X API not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
@@ -276,6 +418,235 @@ components:
           type: string
         message:
           type: string
+        retryAfter:
+          type: integer
+          description: Seconds to wait before retrying (only set on 429 responses)
       required:
         - error
+
+    # ── Intelligence: X scanner schemas ───────────────────────────────────────
+
+    XScanRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: X handle, with or without leading "@"
+      required:
+        - username
+
+    Chain:
+      type: string
+      enum: [sol, eth, btc, tron, ton]
+
+    MultiChainAddress:
+      type: object
+      properties:
+        chain:
+          $ref: "#/components/schemas/Chain"
+        address:
+          type: string
+        kind:
+          type: string
+          enum: [ca, wallet, unknown]
+        postedAt:
+          type: string
+          nullable: true
+        tweetText:
+          type: string
+        tweetId:
+          type: string
+      required:
+        - chain
+        - address
+        - kind
+        - tweetText
+        - tweetId
+
+    PreviousUsername:
+      type: object
+      properties:
+        username:
+          type: string
+        firstSeen:
+          type: string
+        lastSeen:
+          type: string
+      required:
+        - username
+        - firstSeen
+        - lastSeen
+
+    UsernameHistory:
+      type: object
+      properties:
+        currentUsername:
+          type: string
+        previousUsernames:
+          type: array
+          items:
+            $ref: "#/components/schemas/PreviousUsername"
+        firstSeen:
+          type: string
+          nullable: true
+        lastSeen:
+          type: string
+          nullable: true
+        snapshotCount:
+          type: integer
+        possiblePreviousNames:
+          type: array
+          items:
+            type: string
+        note:
+          type: string
+      required:
+        - currentUsername
+        - snapshotCount
+        - note
+
+    XCaResult:
+      type: object
+      properties:
+        username:
+          type: string
+        displayName:
+          type: string
+        followers:
+          type: integer
+        bio:
+          type: string
+        verified:
+          type: boolean
+        joinDate:
+          type: string
+          nullable: true
+        userId:
+          type: string
+          nullable: true
+        caCount:
+          type: integer
+        contractAddresses:
+          type: array
+          description: Solana-only legacy field. Use `addresses` for multi-chain.
+          items:
+            type: object
+            properties:
+              address:
+                type: string
+              postedAt:
+                type: string
+                nullable: true
+              tweetText:
+                type: string
+              tweetId:
+                type: string
+            required: [address, tweetText, tweetId]
+        addresses:
+          type: array
+          items:
+            $ref: "#/components/schemas/MultiChainAddress"
+        addressesByChain:
+          type: object
+          additionalProperties:
+            type: integer
+        usernameHistory:
+          $ref: "#/components/schemas/UsernameHistory"
+        tweetsScanned:
+          type: integer
+        tweetsTruncated:
+          type: boolean
+        pagesFetched:
+          type: integer
+        cached:
+          type: boolean
+      required:
+        - username
+        - displayName
+        - followers
+        - bio
+        - verified
+        - caCount
+        - contractAddresses
+        - usernameHistory
+
+    SmartFollower:
+      type: object
+      properties:
+        username:
+          type: string
+        displayName:
+          type: string
+        followers:
+          type: integer
+        score:
+          type: integer
+        reason:
+          type: string
+      required:
+        - username
+        - displayName
+        - followers
+
+    SmartFollowersResult:
+      type: object
+      properties:
+        username:
+          type: string
+        smartFollowers:
+          type: array
+          items:
+            $ref: "#/components/schemas/SmartFollower"
+        total:
+          type: integer
+        scannedFollowers:
+          type: integer
+        cached:
+          type: boolean
+      required:
+        - smartFollowers
+        - total
+
+    XScanSectionError:
+      type: object
+      properties:
+        status:
+          type: integer
+        message:
+          type: string
+        retryAfter:
+          type: integer
+      required:
+        - status
         - message
+
+    XScanResponse:
+      type: object
+      properties:
+        profile:
+          oneOf:
+            - $ref: "#/components/schemas/XCaResult"
+            - type: "null"
+        smartFollowers:
+          oneOf:
+            - $ref: "#/components/schemas/SmartFollowersResult"
+            - type: "null"
+        errors:
+          type: object
+          properties:
+            profile:
+              oneOf:
+                - $ref: "#/components/schemas/XScanSectionError"
+                - type: "null"
+            smartFollowers:
+              oneOf:
+                - $ref: "#/components/schemas/XScanSectionError"
+                - type: "null"
+          required:
+            - profile
+            - smartFollowers
+        retryAfter:
+          type: integer
+          description: Seconds to wait before retrying (set when any section was rate-limited)
+      required:
+        - errors

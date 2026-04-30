@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Shield, Key, Network, LayoutDashboard, Radar } from "lucide-react";
+import { Shield, Key, LayoutDashboard, Radar, CandlestickChart, LineChart } from "lucide-react";
+import { ConnectWalletPill } from "@/components/connect-wallet-pill";
 
 const XLogo = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -10,9 +11,10 @@ const XLogo = ({ className }: { className?: string }) => (
 
 const tabs = [
   { href: "/app/dashboard", label: "DASH", icon: LayoutDashboard },
+  { href: "/app/trading", label: "DISCOVER", icon: CandlestickChart },
+  { href: "/app/chart", label: "CHART", icon: LineChart },
   { href: "/app/sessions", label: "STEALTH", icon: Shield },
   { href: "/app/wallet", label: "WALLET", icon: Key },
-  { href: "/app/relay", label: "RELAY", icon: Network },
   { href: "/app/intel", label: "INTEL", icon: Radar },
 ];
 
@@ -25,20 +27,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <header className="shrink-0 flex items-center justify-between px-5 md:px-8 h-14 border-b border-white/6 bg-black/60 backdrop-blur z-30">
         <Link href="/">
           <span className="flex items-center gap-2 cursor-pointer">
-            <div className="w-6 h-6 rounded-sm bg-primary flex items-center justify-center">
-              <Shield className="w-3.5 h-3.5 text-black" />
-            </div>
-            <span className="text-xs font-mono font-bold text-primary tracking-widest">SHADOWNET</span>
+            <img src="/logo.jpg" alt="ShadowNet" className="w-6 h-6 rounded-sm object-cover ring-1 ring-primary/40" />
+            <span className="text-xs font-mono font-bold text-primary tracking-widest">SHADOWNET<span className="text-white/30">_</span></span>
           </span>
         </Link>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <ConnectWalletPill />
           <Link href="/docs">
             <span className="text-[10px] font-mono text-white/30 hover:text-white/60 transition-colors cursor-pointer tracking-widest hidden sm:block">DOCS</span>
           </Link>
-          <div className="flex items-center gap-1.5 text-[10px] font-mono text-white/35">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            SECURE
-          </div>
           <a href="https://x.com/shadownetsol?s=21" target="_blank" rel="noopener noreferrer" className="text-white/30 hover:text-white/60 transition-colors">
             <XLogo className="w-3.5 h-3.5" />
           </a>

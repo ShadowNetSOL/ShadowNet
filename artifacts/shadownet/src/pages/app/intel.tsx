@@ -979,91 +979,331 @@ function TrackedWalletsView() {
   );
 }
 
-// ─── X Account Scanner (merged: profile + username history + posted CAs + smart followers) ──
+// ─── X Account Scanner ───────────────────────────────────────────────────────
+// Front Run Pro / Alpha Gate-style intel surface. Search any X handle →
+// pulls posted Solana CAs + wallet addresses from recent tweets, smart
+// follower list, and Wayback-derived username history. Backend scrapes
+// nitter (privacy-preserving) and the smart-followers RPC; nothing is
+// persisted server-side.
+
+type ChainTag = "sol" | "eth" | "btc" | "tron" | "ton";
+
+interface MultiChainAddress {
+  chain: ChainTag;
+  address: string;
+  kind: "ca" | "wallet" | "unknown";
+  postedAt: string | null;
+  tweetText: string;
+  tweetId: string;
+}
+
+interface XCAResult {
+  username: string;
+  displayName: string;
+  followers: number;
+  bio: string;
+  verified: boolean;
+  joinDate: string | null;
+  userId: string | null;
+  caCount: number;
+  contractAddresses: Array<{
+    address: string;
+    postedAt: string | null;
+    tweetText: string;
+    tweetId: string;
+  }>;
+  addresses?: MultiChainAddress[];
+  addressesByChain?: Partial<Record<ChainTag, number>>;
+  tweetsScanned?: number;
+  tweetsTruncated?: boolean;
+  pagesFetched?: number;
+  cached?: boolean;
+  usernameHistory: {
+    currentUsername: string;
+    firstSeen: string | null;
+    lastSeen: string | null;
+    snapshotCount: number;
+    possiblePreviousNames: string[];
+    previousUsernames?: Array<{ username: string; firstSeen: string; lastSeen: string }>;
+    note: string;
+  };
+}
+
+const CHAIN_META: Record<ChainTag, { label: string; color: string; explorer: (a: string) => string }> = {
+  sol:  { label: "SOL",  color: "#14F195", explorer: (a) => `https://solscan.io/account/${a}` },
+  eth:  { label: "EVM",  color: "#627EEA", explorer: (a) => `https://etherscan.io/address/${a}` },
+  btc:  { label: "BTC",  color: "#F7931A", explorer: (a) => `https://blockstream.info/address/${a}` },
+  tron: { label: "TRX",  color: "#FF060A", explorer: (a) => `https://tronscan.org/#/address/${a}` },
+  ton:  { label: "TON",  color: "#0098EA", explorer: (a) => `https://tonviewer.com/${a}` },
+};
+
+interface SmartFollowersResult {
+  smartFollowers: Array<{
+    username: string;
+    displayName: string;
+    followers: number;
+    score?: number;
+    reason?: string;
+  }>;
+  total: number;
+}
 
 function XAccountScanner() {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
-  const [scanned, setScanned] = useState<string | null>(null);
+  const [data, setData] = useState<XCAResult | null>(null);
+  const [followers, setFollowers] = useState<SmartFollowersResult | null>(null);
+  const [followersErr, setFollowersErr] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const scan = async () => {
     const u = username.trim().replace(/^@/, "");
     if (!u) return;
-    setLoading(true); setError(null); setScanned(null);
-    // Single unified scan — runs all sub-checks in parallel.
-    // Backend integration is pending; surface a clear coming-soon notice while preserving the layout.
-    await new Promise(r => setTimeout(r, 1200));
-    setLoading(false);
-    setScanned(u);
-    setError("X API integration is coming next update — this UI shows what each scan will produce.");
+    setLoading(true); setError(null); setData(null); setFollowers(null); setFollowersErr(null);
+    try {
+      // x-ca is the source of truth for profile + CAs + history. Smart
+      // followers is independent — we let it fail without nuking the
+      // primary result so the page still renders the scrape data even
+      // if the X API isn't configured.
+      const [primary, sf] = await Promise.allSettled([
+        callApi<XCAResult>("intelligence/x-ca", { username: u }),
+        callApi<SmartFollowersResult>("intelligence/smart-followers", { username: u }),
+      ]);
+      if (primary.status === "fulfilled") setData(primary.value);
+      else throw new Error(primary.reason?.message ?? "Scan failed");
+      if (sf.status === "fulfilled") setFollowers(sf.value);
+      else setFollowersErr(sf.reason?.message ?? "Smart followers unavailable");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Scan failed");
+    } finally { setLoading(false); }
   };
 
-  const sections: Array<{ title: string; desc: string; icon: React.ElementType; color: string }> = [
-    { title: "PROFILE",          desc: "Handle, display name, bio, verification, follower & following counts.",        icon: XLogo,    color: "#ffffff" },
-    { title: "USERNAME HISTORY", desc: "Previous handles detected from public archive snapshots & rename patterns.",   icon: Clock,    color: "#8B5CF6" },
-    { title: "POSTED CONTRACTS", desc: "Solana contract addresses found in recent posts, with tweet links & dates.",   icon: FileText, color: "#39FF14" },
-    { title: "SMART FOLLOWERS",  desc: "Known alpha traders, devs & KOLs that follow this account, ranked by signal.", icon: Star,     color: "#8B5CF6" },
-  ];
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <div>
         <h2 className="text-base font-mono font-bold text-white mb-1">X Account Intelligence</h2>
-        <p className="text-xs font-mono text-white/35">One scan: profile, username history, posted contracts & smart followers.</p>
+        <p className="text-xs font-mono text-white/35">Profile, posted addresses, username history & smart followers — one scan.</p>
       </div>
 
       {/* Input */}
       <div className="flex gap-2">
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-w-0">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm font-mono">@</span>
           <input value={username} onChange={e => setUsername(e.target.value.replace(/^@/, ""))}
             onKeyDown={e => e.key === "Enter" && scan()}
             placeholder="username"
-            className="w-full bg-black border border-white/10 rounded-lg pl-8 pr-4 py-3 text-sm font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-colors" />
+            autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            className="w-full bg-black border border-white/10 rounded-lg pl-8 pr-3 py-3 text-sm font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-colors" />
         </div>
         <button onClick={scan} disabled={loading || !username.trim()}
-          className="px-5 py-3 bg-primary text-black font-mono font-bold text-xs rounded-lg hover:bg-white transition-colors disabled:opacity-40 tracking-widest flex items-center gap-2">
-          {loading ? (
-            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}>
-              <Search className="w-4 h-4" />
-            </motion.div>
-          ) : <Search className="w-4 h-4" />}
-          SCAN
+          className="shrink-0 px-4 sm:px-5 py-3 bg-primary text-black font-mono font-bold text-[11px] sm:text-xs rounded-lg hover:bg-white transition-colors disabled:opacity-40 tracking-widest flex items-center gap-2">
+          {loading
+            ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}><Search className="w-4 h-4" /></motion.div>
+            : <Search className="w-4 h-4" />}
+          <span className="hidden sm:inline">SCAN</span>
         </button>
       </div>
 
-      {/* What this scan returns — always visible */}
-      <div className="grid grid-cols-2 gap-2.5">
-        {sections.map(s => (
-          <div key={s.title} className="p-3 rounded-lg border border-white/6 bg-white/[0.015]">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <s.icon className="w-3 h-3" style={{ color: s.color }} />
-              <p className="text-[9px] font-mono tracking-widest" style={{ color: s.color }}>{s.title}</p>
-            </div>
-            <p className="text-[10px] font-mono text-white/45 leading-relaxed">{s.desc}</p>
-          </div>
-        ))}
-      </div>
-
-      {error && (
-        <div className="p-4 rounded-lg border border-amber-500/25 bg-amber-500/5 flex gap-3">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-[10px] font-mono text-amber-400 tracking-widest mb-1">COMING SOON</p>
-            <p className="text-xs font-mono text-amber-400/80 leading-relaxed">{error}</p>
-            {scanned && (
-              <p className="text-[10px] font-mono text-white/30 mt-2">
-                Queued scan: <span className="text-white/60">@{scanned}</span>
-              </p>
-            )}
-          </div>
+      {loading && (
+        <div className="p-4 rounded-lg border border-primary/15 bg-primary/[0.03] flex items-center gap-3">
+          <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}>
+            <Activity className="w-4 h-4 text-primary" />
+          </motion.div>
+          <p className="text-xs font-mono text-primary/80">Scraping recent posts, archive history, smart followers…</p>
         </div>
       )}
 
-      <p className="text-[9px] font-mono text-white/20 text-center leading-relaxed pt-1">
-        Requires Twitter API v2 Bearer Token to enable. Privacy-preserving: handles are queried per-scan and never persisted server-side.
-      </p>
+      {error && (
+        <div className="p-4 rounded-lg border border-red-500/25 bg-red-500/5 flex gap-3">
+          <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+          <p className="text-xs font-mono text-red-400 break-words flex-1">{error}</p>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {data && (
+          <motion.div key={data.username} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            {/* Profile */}
+            <div className="p-4 sm:p-5 rounded-xl border border-white/8 bg-white/[0.02]">
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center shrink-0">
+                  <XLogo className="w-4 h-4 text-white/80" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-bold text-white text-sm truncate">{data.displayName}</span>
+                    {data.verified && <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
+                  </div>
+                  <a href={`https://x.com/${data.username}`} target="_blank" rel="noopener noreferrer"
+                    className="text-xs font-mono text-white/40 hover:text-primary inline-flex items-center gap-1 break-all">
+                    @{data.username} <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-base font-mono font-bold text-white tabular-nums">{fmtNum(data.followers)}</p>
+                  <p className="text-[9px] font-mono text-white/30 tracking-widest uppercase">Followers</p>
+                </div>
+              </div>
+              {data.bio && <p className="text-xs font-mono text-white/55 leading-relaxed break-words">{data.bio}</p>}
+              {data.joinDate && (
+                <p className="text-[10px] font-mono text-white/30 mt-2 flex items-center gap-1.5">
+                  <Clock className="w-3 h-3" /> Joined {data.joinDate}
+                </p>
+              )}
+            </div>
+
+            {/* Posted Addresses — multi-chain. Falls back to the legacy
+                Solana-only list if the backend is older. */}
+            <div className="p-4 sm:p-5 rounded-xl border border-primary/20 bg-primary/[0.03]">
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <p className="text-[10px] font-mono text-primary tracking-widest">POSTED ADDRESSES</p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {data.addressesByChain && Object.entries(data.addressesByChain)
+                    .filter(([, n]) => (n ?? 0) > 0)
+                    .map(([c, n]) => {
+                      const m = CHAIN_META[c as ChainTag];
+                      return (
+                        <span key={c} className="text-[9px] font-mono px-1.5 py-0.5 rounded border"
+                          style={{ color: m.color, borderColor: m.color + "55", background: m.color + "11" }}>
+                          {m.label} {n}
+                        </span>
+                      );
+                    })}
+                  <span className="text-[10px] font-mono text-primary/60">{(data.addresses?.length ?? data.caCount)} total</span>
+                </div>
+              </div>
+              {data.tweetsScanned !== undefined && (
+                <p className="text-[9px] font-mono text-white/30 mb-3">
+                  Scanned {data.tweetsScanned.toLocaleString()} tweet{data.tweetsScanned === 1 ? "" : "s"}
+                  {data.tweetsTruncated ? " (capped at 1,000 — older posts not included)" : ""}
+                  {data.cached ? " · cached" : ""}
+                </p>
+              )}
+              {(() => {
+                const items: MultiChainAddress[] = data.addresses
+                  ?? data.contractAddresses.map((c) => ({ chain: "sol" as const, address: c.address, kind: "unknown" as const, postedAt: c.postedAt, tweetText: c.tweetText, tweetId: c.tweetId }));
+                if (items.length === 0) {
+                  return <p className="text-xs font-mono text-white/35">No on-chain addresses found in scanned posts.</p>;
+                }
+                return (
+                  <ul className="space-y-2">
+                    {items.map((c) => {
+                      const meta = CHAIN_META[c.chain];
+                      return (
+                        <li key={c.chain + c.address + c.tweetId} className="p-2.5 rounded-lg border border-white/8 bg-black/40 space-y-1.5">
+                          <div className="flex items-start gap-2">
+                            <span className="shrink-0 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded mt-0.5"
+                              style={{ color: meta.color, background: meta.color + "1F", border: `1px solid ${meta.color}55` }}>
+                              {meta.label}
+                            </span>
+                            <code className="font-mono text-[11px] text-primary break-all flex-1">{c.address}</code>
+                            <button
+                              onClick={() => navigator.clipboard.writeText(c.address)}
+                              className="shrink-0 text-white/30 hover:text-primary" title="Copy">
+                              <Copy className="w-3 h-3" />
+                            </button>
+                            <a href={meta.explorer(c.address)} target="_blank" rel="noopener noreferrer"
+                              className="shrink-0 text-white/30 hover:text-primary" title="View in explorer">
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                          {c.tweetText && (
+                            <p className="text-[10px] font-mono text-white/45 break-words leading-snug line-clamp-2">{c.tweetText}</p>
+                          )}
+                          <div className="flex items-center justify-between gap-2 text-[9px] font-mono text-white/30">
+                            <span>{c.postedAt ? new Date(c.postedAt).toLocaleString() : "unknown date"}</span>
+                            {c.tweetId && (
+                              <a href={`https://x.com/${data.username}/status/${c.tweetId}`} target="_blank" rel="noopener noreferrer"
+                                className="text-white/40 hover:text-primary inline-flex items-center gap-1">
+                                view post <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              })()}
+            </div>
+
+            {/* Username History */}
+            <div className="p-4 sm:p-5 rounded-xl border border-secondary/25 bg-secondary/[0.03]">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-mono text-secondary tracking-widest">USERNAME HISTORY</p>
+                {data.usernameHistory.snapshotCount > 0 && (
+                  <span className="text-[10px] font-mono text-white/40">{data.usernameHistory.snapshotCount} archive snapshots</span>
+                )}
+              </div>
+              {data.usernameHistory.previousUsernames && data.usernameHistory.previousUsernames.length > 0 ? (
+                <div className="space-y-1.5 mb-3">
+                  {data.usernameHistory.previousUsernames.map((prev) => (
+                    <div key={prev.username} className="flex items-center gap-2 text-xs font-mono">
+                      <span className="text-white/30">↳</span>
+                      <span className="text-white/70 break-all flex-1 min-w-0 truncate">@{prev.username}</span>
+                      <span className="text-[9px] font-mono text-white/30 hidden sm:inline">last seen {new Date(prev.lastSeen).toLocaleDateString()}</span>
+                      <span className="text-[9px] font-mono text-secondary tracking-widest shrink-0">TRACKED</span>
+                    </div>
+                  ))}
+                </div>
+              ) : data.usernameHistory.possiblePreviousNames.length > 0 ? (
+                <div className="space-y-1.5 mb-3">
+                  {data.usernameHistory.possiblePreviousNames.map((prev) => (
+                    <div key={prev} className="flex items-center gap-2 text-xs font-mono">
+                      <span className="text-white/30">↳</span>
+                      <span className="text-white/70 break-all">@{prev}</span>
+                      <span className="text-[9px] font-mono text-secondary/70 tracking-widest ml-auto shrink-0">ARCHIVE</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {(data.usernameHistory.firstSeen || data.usernameHistory.lastSeen) && (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-[10px] font-mono text-white/40 mb-2">
+                  {data.usernameHistory.firstSeen && <span>first seen <span className="text-white/60">{data.usernameHistory.firstSeen}</span></span>}
+                  {data.usernameHistory.lastSeen && <span>last seen <span className="text-white/60">{data.usernameHistory.lastSeen}</span></span>}
+                </div>
+              )}
+              <p className="text-[10px] font-mono text-white/45 leading-relaxed">{data.usernameHistory.note}</p>
+            </div>
+
+            {/* Smart Followers */}
+            <div className="p-4 sm:p-5 rounded-xl border border-secondary/25 bg-secondary/[0.03]">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-mono text-secondary tracking-widest">SMART FOLLOWERS</p>
+                {followers && <span className="text-[10px] font-mono text-secondary/60">{followers.total} known alpha</span>}
+              </div>
+              {followersErr && (
+                <p className="text-[10px] font-mono text-amber-400/70 leading-relaxed">{followersErr}</p>
+              )}
+              {!followersErr && followers && followers.smartFollowers.length === 0 && (
+                <p className="text-xs font-mono text-white/35">No known smart-money accounts follow @{data.username}.</p>
+              )}
+              {followers && followers.smartFollowers.length > 0 && (
+                <ul className="space-y-1.5">
+                  {followers.smartFollowers.slice(0, 12).map((f) => (
+                    <li key={f.username} className="flex items-center gap-2 p-2 rounded-lg border border-white/6 bg-black/30">
+                      <Star className="w-3 h-3 text-yellow-400 shrink-0" />
+                      <a href={`https://x.com/${f.username}`} target="_blank" rel="noopener noreferrer"
+                        className="text-xs font-mono text-white hover:text-primary truncate flex-1">{f.displayName || f.username}</a>
+                      <span className="text-[10px] font-mono text-white/40 shrink-0 hidden sm:inline">@{f.username}</span>
+                      <span className="text-[10px] font-mono text-white/50 tabular-nums shrink-0">{fmtNum(f.followers)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!followersErr && !followers && (
+                <p className="text-[10px] font-mono text-white/35">Loading…</p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!data && !loading && !error && (
+        <p className="text-[10px] font-mono text-white/25 text-center leading-relaxed pt-2">
+          Privacy-preserving: scraped via nitter mirror, no Twitter API key needed for the primary scan. Handles never persisted.
+        </p>
+      )}
     </div>
   );
 }

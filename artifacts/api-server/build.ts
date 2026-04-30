@@ -1,7 +1,7 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import { build as esbuild } from "esbuild";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, cp, mkdir, stat } from "fs/promises";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,15 +58,36 @@ async function buildAll() {
     entryPoints: [path.resolve(__dirname, "src/index.ts")],
     platform: "node",
     bundle: true,
-    format: "cjs",
-    outfile: path.resolve(distDir, "index.cjs"),
+    format: "esm",
+    outfile: path.resolve(distDir, "index.mjs"),
     define: {
       "process.env.NODE_ENV": '"production"',
     },
     minify: true,
     external: externals,
+    // Banner injects createRequire so any CJS-only dep (e.g. drizzle internals)
+    // that calls require() inside the ESM bundle keeps working.
+    banner: {
+      js: "import { createRequire as __cR } from 'node:module';const require=__cR(import.meta.url);",
+    },
     logLevel: "info",
   });
+
+  // Copy the built frontend (Vite output) next to the bundled server so the
+  // single Railway service can serve both API and SPA from the same origin.
+  // Path: artifacts/api-server/dist/public/* <- artifacts/shadownet/dist/public/*
+  const frontendDist = path.resolve(__dirname, "..", "shadownet", "dist", "public");
+  const targetPublic = path.resolve(distDir, "public");
+  try {
+    await stat(frontendDist);
+    await mkdir(targetPublic, { recursive: true });
+    await cp(frontendDist, targetPublic, { recursive: true });
+    console.log(`[api-server] copied frontend dist -> ${targetPublic}`);
+  } catch {
+    console.warn(
+      `[api-server] frontend dist not found at ${frontendDist}; build the shadownet artifact first`,
+    );
+  }
 }
 
 buildAll().catch((err) => {

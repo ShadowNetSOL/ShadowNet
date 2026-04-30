@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { classify } from "../lib/classify";
+import { recordHostFailure } from "../lib/hostHistory";
 
 const router = Router();
 
@@ -8,13 +10,15 @@ const SPOOFED_UAS = [
 ];
 
 function pickUA() {
-  return SPOOFED_UAS[Math.floor(Math.random() * SPOOFED_UAS.length)];
+  return SPOOFED_UAS[Math.floor(Math.random() * SPOOFED_UAS.length)] as string;
 }
 
 // GET /relay/verify?url=<encoded>
-// Fetches the target server-side and returns proof: relay IP, status, timing, page title
+// Fetches the target server-side, classifies any anti-bot signal, and
+// updates the per-host failure history so the orchestrator can decide
+// whether to escalate this destination to the remote-browser tier.
 router.get("/relay/verify", async (req, res) => {
-  const rawUrl = req.query.url as string | undefined;
+  const rawUrl = req.query["url"] as string | undefined;
   if (!rawUrl) return res.status(400).json({ error: "Missing url parameter" });
 
   let targetUrl: string;
@@ -26,6 +30,7 @@ router.get("/relay/verify", async (req, res) => {
     return res.status(400).json({ error: "Invalid URL" });
   }
 
+  const originalHost = new URL(targetUrl).host;
   const start = Date.now();
   try {
     const upstream = await fetch(targetUrl, {
@@ -49,22 +54,35 @@ router.get("/relay/verify", async (req, res) => {
     const contentType = upstream.headers.get("content-type") ?? "";
     const server = upstream.headers.get("server") ?? upstream.headers.get("x-powered-by") ?? "unknown";
 
-    // Try to extract page title from HTML
     let pageTitle = "";
+    let bodySample = "";
     if (contentType.includes("text/html")) {
       const text = await upstream.text();
+      bodySample = text.slice(0, 64 * 1024).toLowerCase();
       const m = text.match(/<title[^>]*>([^<]{1,120})<\/title>/i);
-      if (m) pageTitle = m[1].trim();
+      if (m) pageTitle = (m[1] ?? "").trim();
     }
 
-    // Get the server's outbound IP from an IP echo service
+    const verdict = classify({
+      status: upstream.status,
+      finalUrl,
+      originalHost,
+      headers: upstream.headers,
+      bodySample,
+      contentType,
+    });
+
+    if (verdict.challenge) {
+      recordHostFailure(originalHost, verdict);
+    }
+
     let relayIp = "relay-node";
     try {
       const ipRes = await fetch("https://api.ipify.org?format=json", {
         signal: AbortSignal.timeout(4000),
       });
       if (ipRes.ok) {
-        const j = await ipRes.json() as { ip?: string };
+        const j = (await ipRes.json()) as { ip?: string };
         if (j.ip) relayIp = j.ip;
       }
     } catch { /* ignore */ }
@@ -80,9 +98,13 @@ router.get("/relay/verify", async (req, res) => {
       latencyMs,
       relayIp,
       server,
-      contentType: contentType.split(";")[0].trim(),
+      contentType: contentType.split(";")[0]!.trim(),
       pageTitle: pageTitle || parsed.host,
       redirected: finalUrl !== targetUrl,
+      // Legacy field (still consumed by the toast UX).
+      challenge: verdict.challenge,
+      // New verdict surface: structured + confidence + recommendation.
+      verdict,
     });
 
   } catch (err: unknown) {
