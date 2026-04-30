@@ -1,14 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { motion, useInView } from "framer-motion";
-import { Shield, Key, Network, Radar, ChevronRight, Check, X } from "lucide-react";
-import { Centipede as GameOfLife } from "@/components/centipede";
-import { GlitchText } from "@/components/glitch-text";
-import { LogoOrbit } from "@/components/logo-orbit";
-import { HudStrip } from "@/components/hud-strip";
-import { StackVisualizer } from "@/components/stack-visualizer";
-import { ConicCard } from "@/components/conic-card";
-import { LiveDemo } from "@/components/live-demo";
+import { Shield, Key, Network, Radar, ChevronRight, Check, X, Github } from "lucide-react";
 
 const XLogo = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -127,7 +120,7 @@ function FadeIn({ children, className = "", delay = 0 }: { children: React.React
 /* ─── Section label ─── */
 function SectionLabel({ children }: { children: string }) {
   return (
-    <div className="inline-flex items-center gap-2 font-pixel text-[15px] tracking-[0.32em] text-jade uppercase mb-4">
+    <div className="inline-flex items-center gap-2 text-xs font-mono tracking-[0.25em] text-primary uppercase mb-4">
       <span className="w-4 h-px bg-primary" />
       {children}
       <span className="w-4 h-px bg-primary" />
@@ -139,48 +132,49 @@ const capabilities = [
   {
     icon: Shield,
     title: "Stealth Sessions",
-    desc: "Every session gets a freshly generated fingerprint — spoofed canvas, WebGL, audio, fonts, timezone, and user-agent. IP cloaked through a relay node. Zero cross-session data leakage.",
-    tags: ["Fingerprint Randomization", "IP Cloaking", "Session Isolation"],
+    desc: "Every session is built from a region-coherent fingerprint bundle. UA, platform, WebGL, fonts, screen, timezone, and locale lock together so destinations cannot detect internal contradictions. IP routed through ShadowNet-operated infrastructure. Sessions are isolated and expire after one hour.",
+    tags: ["Region-Coherent Bundles", "Two-Tier Routing", "Session Isolation"],
     color: "primary",
   },
   {
     icon: Key,
     title: "Anonymous Wallets",
-    desc: "Ed25519 keypairs derived from BIP-39 mnemonics. Base58-encoded private keys importable directly into Phantom. Never stored, never logged. Generated in-memory and discarded.",
-    tags: ["Ed25519 Keypairs", "BIP-39 Mnemonic", "Phantom Compatible"],
+    desc: "Solana keypairs generated 100% in your browser using audited primitives: @scure/bip39, @noble/ed25519, and SLIP-0010 hardened derivation. Phantom-compatible. The server has no key endpoint and no code path that ever sees a mnemonic, seed, or private key.",
+    tags: ["Browser-Only", "Phantom Compatible", "Sovereign Keys"],
     color: "primary",
   },
   {
     icon: Network,
-    title: "Relay Network",
-    desc: "A curated registry of relay nodes across 12+ countries. Each nodefor no-logging compliance, security hardening, and uptime. Select by latency or jurisdiction.",
-    tags: [" Nodes", "Global Coverage"],
+    title: "Relay & Routing",
+    desc: "Geo-distributed bare-server proxy with auto-escalation to a disposable Chromium pool when destinations gate hard. The orchestrator picks the right tier per request using a failure classifier and per-host history. Bare server logs hostname and status only.",
+    tags: ["No-Log Bare Server", "Classifier Driven", "Holder-Gated Pool"],
     color: "primary",
   },
   {
     icon: Radar,
     title: "Intel Hub",
-    desc: "On-chain intelligence suite for Solana. Analyze any wallet's full PnL history, scan X accounts for contract address calls, and identify smart-money followers — all without leaving ShadowNet.",
+    desc: "On-chain intelligence suite for Solana. Analyze any wallet's full PnL history, scan X accounts for Solana contract addresses via the official X API v2, identify smart-money followers, and run GitHub recon, all routed through the same private layer as your browsing.",
     tags: ["Wallet Analyzer", "X CA Checker", "Smart Followers"],
     color: "secondary",
   },
 ];
 
 const architecturePillars = [
-  { title: "Zero Retention", body: "No session data, wallet keys, or connection logs are persisted anywhere. Every record is ephemeral by design." },
-  { title: "Session Isolation", body: "Each stealth session runs in a sandboxed context. Cookies, cache, and local storage never carry over between sessions." },
-  { title: "Client-Side Keys", body: "Wallet keypairs are generated server-side and transmitted once over TLS. ShadowNet holds no copy after the response is delivered." },
+  { title: "Zero Retention", body: "No session data, wallet keys, or request bodies are persisted anywhere. The bare server logs hostname and HTTP status only. The session store is in-memory and clears on every restart." },
+  { title: "Session Isolation", body: "Each stealth session runs in a sandboxed context with its own fingerprint bundle. Cookies, cache, and local storage never carry over between sessions." },
+  { title: "Open Source, MIT", body: "Every line of the relay, orchestrator, and frontend is on GitHub under MIT. No closed-source middleware, no proprietary tracking SDK, no hidden dependencies. Independent audit on the roadmap." },
+  { title: "Browser-Only Keys", body: "Solana wallets are generated entirely in your browser using audited primitives. The server has no key endpoint, no recovery path, and nothing to subpoena. We literally cannot lose what we never hold." },
 ];
 
 const comparisonRows = [
-  { feature: "Fingerprint Randomization", shadownet: true, vpn: false, browser: false },
-  { feature: "IP Cloaking via Relay", shadownet: true, vpn: true, browser: false },
-  { feature: "Session Isolation", shadownet: true, vpn: false, browser: false },
-  { feature: "Anonymous Wallet Generation", shadownet: true, vpn: false, browser: false },
-  { feature: "No Server-Side Data Retention", shadownet: true, vpn: false, browser: false },
-  { feature: " Infrastructure", shadownet: true, vpn: false, browser: false },
-  { feature: "Web3 / dApp Optimized", shadownet: true, vpn: false, browser: false },
-  { feature: "On-Chain Intel Hub", shadownet: true, vpn: false, browser: false },
+  { feature: "Region-Coherent Fingerprint Bundles", shadownet: true, vpn: false, browser: false },
+  { feature: "IP Routed Through Operated Infrastructure", shadownet: true, vpn: true, browser: false },
+  { feature: "Session Isolation Per Tab", shadownet: true, vpn: false, browser: false },
+  { feature: "Browser-Only Wallet Generation", shadownet: true, vpn: false, browser: false },
+  { feature: "No Bodies / Headers / IPs Logged", shadownet: true, vpn: false, browser: false },
+  { feature: "Auto-Escalation to Remote Browser", shadownet: true, vpn: false, browser: false },
+  { feature: "Web3 / dApp Native", shadownet: true, vpn: false, browser: false },
+  { feature: "On-Chain Intel Hub Built In", shadownet: true, vpn: false, browser: false },
 ];
 
 export default function Landing() {
@@ -191,9 +185,11 @@ export default function Landing() {
 
       {/* ── NAV ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-12 h-16 border-b border-white/5 bg-[#050505]/90 backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <img src="/logo.jpg" alt="ShadowNet" className="w-8 h-8 rounded-sm object-cover ring-1 ring-primary/40" />
-          <span className="font-mono font-bold tracking-widest text-primary text-sm">SHADOWNET<span className="text-white/30">_</span></span>
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-sm bg-primary flex items-center justify-center">
+            <Shield className="w-4 h-4 text-black" />
+          </div>
+          <span className="font-mono font-bold tracking-widest text-primary text-sm">SHADOWNET</span>
         </div>
         <div className="flex items-center gap-6">
           <Link href="/docs">
@@ -204,171 +200,116 @@ export default function Landing() {
               LAUNCH APP <ChevronRight className="w-3 h-3" />
             </span>
           </Link>
+          <a
+            href="https://x.com/shadownetsol?s=21"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="ShadowNet on X"
+            className="text-white/50 hover:text-white transition-colors"
+          >
+            <XLogo className="w-4 h-4" />
+          </a>
+          <a
+            href="https://github.com/ShadowNetSOL/ShadowNet"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="ShadowNet on GitHub"
+            className="text-white/50 hover:text-white transition-colors"
+          >
+            <Github className="w-4 h-4" />
+          </a>
         </div>
       </nav>
 
       {/* ── HERO ── */}
-      <section className="scanlines relative min-h-screen flex flex-col items-center justify-center text-center px-4 sm:px-6 pt-16 overflow-hidden">
-        {/* Conway's Game of Life — calibrated subtle: ~10% opacity, slow, 12-cell. */}
-        <GameOfLife className="absolute inset-0 w-full h-full opacity-30" cell={12} tickMs={180} density={0.16} />
-        {/* Layered vignettes — pull eye to centre, kill grid noise around edges. */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#050606]/20 via-transparent to-[#050606] pointer-events-none" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_25%,_#050606_82%)] pointer-events-none" />
-
-        <div className="relative z-10 max-w-5xl mx-auto w-full">
-          {/* Status badge — subtle, less generic */}
-          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/25 bg-primary/5 mb-10">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-accent opacity-75 animate-ping" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-accent" />
-            </span>
-            <span className="text-[10px] font-mono text-accent tracking-[0.3em] uppercase">v0.4 // protocol active</span>
+      <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-6 pt-16 overflow-hidden">
+        <ParticleGrid />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#050505]/20 to-[#050505] pointer-events-none" />
+        <div className="relative z-10 max-w-5xl mx-auto">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/5 text-primary text-xs font-mono tracking-widest mb-10">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              SYSTEM ONLINE &bull; CORE CONNECTED
+            </div>
           </motion.div>
-
-          {/* Holographic logo plate */}
-          <motion.div initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-            className="flex justify-center mb-10">
-            <LogoOrbit src="/logo.jpg" size={180} />
-          </motion.div>
-
-          {/* Wordmark — 8-bit pixel face, single jade ombre, one tonal family.
-              No white juxtaposition, no mixed weights. Reads as a single
-              piece of art instead of two competing sentences. */}
-          <h1 className="leading-[0.9] mb-8 select-none">
-            <motion.span
-              initial={{ opacity: 0, letterSpacing: "0.5em" }}
-              animate={{ opacity: 1, letterSpacing: "0.32em" }}
-              transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] }}
-              className="block font-pixel text-[15px] sm:text-base text-jade tracking-[0.42em] uppercase mb-6">
-              shadownet // privacy mesh
-            </motion.span>
-            <span className="pixel-glow inline-block mb-6">
-              <GlitchText
-                as="span"
-                text="ENTER THE"
-                charMs={45}
-                staggerMs={28}
-                className="pixel-crisp text-jade-pixel-bands block text-[28px] sm:text-5xl md:text-6xl"
-              />
-            </span>
-            {/* SHADOW + cursor on the same line. The wrapper carries the
-                responsive font-size so both the text and the em-sized
-                cursor scale together — no wrap, no size mismatch. */}
-            <span className="pixel-glow inline-flex items-end gap-[0.18em] text-[44px] sm:text-7xl md:text-8xl leading-none">
-              <GlitchText
-                as="span"
-                text="SHADOW"
-                charMs={55}
-                staggerMs={50}
-                className="pixel-crisp text-jade-pixel-bands"
-              />
-              <span aria-hidden="true"
-                className="inline-block animate-pulse"
-                style={{
-                  width: "0.55em",
-                  height: "0.78em",
-                  marginBottom: "0.08em",
-                  background: "#6FAF9B",
-                  /* Hard 1px shadow inside, no blur — keeps the cursor
-                     visually pixelated to match the glyphs. */
-                  boxShadow: "inset 0 -0.12em 0 #3E7C6A",
-                }}
-              />
-            </span>
-          </h1>
-
-          <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.55 }}
-            className="font-pixel text-[18px] sm:text-xl text-jade/80 max-w-xl mx-auto mb-10 leading-snug tracking-wide">
-            A programmable browser execution layer.<br className="hidden sm:block" />
-            Fingerprint-coherent stealth sessions, region-routed relays, and on-chain intel — zero retention.
+          <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.1 }}
+            className="text-5xl sm:text-7xl md:text-8xl font-mono font-bold leading-[0.95] tracking-tight mb-8">
+            ENTER THE<br />
+            <span className="text-primary" style={{ textShadow: "0 0 40px rgba(57,255,20,0.4)" }}>SHADOW.</span>
+          </motion.h1>
+          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.25 }}
+            className="text-base sm:text-lg text-white/50 font-mono max-w-2xl mx-auto mb-12 leading-relaxed">
+            The privacy layer Web3 was supposed to have. Anonymous wallets, sovereign browsing, and on-chain intelligence in one open-source dApp. Built for users who refuse to choose between participating in Web3 and protecting their identity.
           </motion.p>
-
-          {/* HUD telemetry */}
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.7 }}
-            className="mb-10">
-            <HudStrip />
-          </motion.div>
-
-          {/* CTAs with animated sweep */}
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.85 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.4 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/app/dashboard">
-              <span className="group relative inline-flex items-center gap-2 px-8 py-3.5 bg-primary text-primary-foreground font-mono font-bold rounded-lg cursor-pointer text-xs tracking-[0.25em] overflow-hidden ring-1 ring-accent/40 hover:ring-accent transition-all"
-                style={{ boxShadow: "0 0 32px rgba(111,175,155,0.35), inset 0 0 0 1px rgba(111,175,155,0.2)" }}>
-                <span className="pointer-events-none absolute inset-y-0 -left-10 w-12 bg-white/30"
-                  style={{ animation: "cta-sweep 2.6s ease-in-out infinite" }} />
-                <span className="relative">LAUNCH APP</span>
-                <ChevronRight className="relative w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+              <span className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-black font-mono font-bold rounded hover:bg-white transition-all cursor-pointer text-sm tracking-widest"
+                style={{ boxShadow: "0 0 40px rgba(57,255,20,0.3)" }}>
+                LAUNCH APP <ChevronRight className="w-4 h-4" />
               </span>
             </Link>
             <Link href="/docs">
-              <span className="inline-flex items-center gap-2 px-8 py-3.5 border border-white/15 text-white/65 hover:border-accent/50 hover:text-white font-mono rounded-lg cursor-pointer text-xs tracking-[0.25em] transition-all">
+              <span className="inline-flex items-center gap-2 px-8 py-4 border border-white/15 text-white/70 hover:border-primary/40 hover:text-white font-mono rounded transition-all cursor-pointer text-sm tracking-widest">
                 VIEW DOCS
               </span>
             </Link>
           </motion.div>
         </div>
-
-        {/* Scroll cue — subtler, no bounce */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5">
-          <span className="text-[9px] font-mono text-white/25 tracking-[0.4em]">SCROLL</span>
-          <span className="w-px h-6 bg-gradient-to-b from-accent/60 to-transparent" />
-        </motion.div>
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce">
+          <span className="text-xs font-mono text-white/20 tracking-widest">SCROLL</span>
+          <div className="w-px h-8 bg-gradient-to-b from-white/20 to-transparent" />
+        </div>
       </section>
 
       {/* ── CORE CAPABILITIES ── */}
-      <section className="py-16 md:py-32 px-4 sm:px-6 md:px-12 max-w-7xl mx-auto">
+      <section className="py-32 px-6 md:px-12 max-w-7xl mx-auto">
         <div className="grid md:grid-cols-2 gap-16 items-center mb-24">
           <FadeIn>
             <SectionLabel>Core Capabilities</SectionLabel>
-            <h2 className="font-pixel text-2xl sm:text-3xl md:text-4xl text-jade-ombre leading-tight mb-6">
+            <h2 className="text-4xl md:text-5xl font-mono font-bold leading-tight mb-6">
               Four layers.<br />
-              <span className="text-jade-ombre">One stack.</span>
+              <span className="text-primary">One stack.</span>
             </h2>
-            <p className="font-pixel text-jade/70 text-lg leading-snug max-w-md">
+            <p className="text-white/45 font-mono text-sm leading-relaxed max-w-md">
               ShadowNet operates across four independent modules that compound on each other: stealth sessions, anonymous wallets, a global relay network, and on-chain intelligence. Every layer closes a distinct tracking vector that conventional tools leave open.
             </p>
           </FadeIn>
-          <FadeIn delay={0.2} className="relative h-[340px] sm:h-[420px] md:h-[480px] -mx-2 sm:mx-0">
-            <StackVisualizer size={460} className="w-full h-full" />
+          <FadeIn delay={0.2} className="h-72">
+            <NodeVisualization />
           </FadeIn>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {capabilities.map((c, i) => {
-            const tone: "primary" | "accent" = c.color === "secondary" ? "accent" : "primary";
+            const isSecondary = c.color === "secondary";
             return (
-              <FadeIn key={c.title} delay={i * 0.08}>
-                <ConicCard tone={tone} className="h-full">
-                  <div className="p-7 h-full flex flex-col">
-                    <div className="flex items-center justify-between mb-5">
-                      <div className={`w-11 h-11 rounded-lg flex items-center justify-center ${
-                        tone === "accent" ? "bg-accent/10 border border-accent/30" : "bg-primary/10 border border-primary/30"
-                      }`}
-                        style={{ boxShadow: tone === "accent" ? "0 0 20px rgba(111,175,155,0.25)" : "0 0 20px rgba(62,124,106,0.25)" }}>
-                        <c.icon className={`w-5 h-5 ${tone === "accent" ? "text-accent" : "text-primary"}`} />
-                      </div>
-                      <span className={`text-[9px] font-mono tracking-[0.2em] ${tone === "accent" ? "text-accent/60" : "text-primary/60"}`}>
-                        {String(i + 1).padStart(2, "0")} / 04
-                      </span>
-                    </div>
-                    <h3 className="text-base font-mono font-bold text-white mb-2 tracking-tight">{c.title}</h3>
-                    <p className="font-pixel text-jade/65 text-[15px] leading-snug mb-5 flex-1">{c.desc}</p>
-                    <div className="flex flex-wrap gap-1.5 pt-4 border-t border-white/5">
-                      {c.tags.map(tag => (
-                        <span key={tag} className={`px-2 py-0.5 rounded text-[9px] font-mono border ${
-                          tone === "accent"
-                            ? "text-accent/80 border-accent/20 bg-accent/5"
-                            : "text-primary/80 border-primary/20 bg-primary/5"
-                        }`}>
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
+              <FadeIn key={c.title} delay={i * 0.1}>
+                <div className={`group h-full p-8 rounded-xl border bg-white/[0.02] transition-all duration-300 cursor-default ${
+                  isSecondary
+                    ? "border-white/8 hover:border-secondary/30 hover:bg-secondary/[0.03]"
+                    : "border-white/8 hover:border-primary/30 hover:bg-primary/[0.03]"
+                }`}>
+                  <div className={`w-10 h-10 rounded-lg border flex items-center justify-center mb-6 transition-colors ${
+                    isSecondary
+                      ? "bg-secondary/10 border-secondary/20 group-hover:bg-secondary/20"
+                      : "bg-primary/10 border-primary/20 group-hover:bg-primary/20"
+                  }`}>
+                    <c.icon className={`w-5 h-5 ${isSecondary ? "text-secondary" : "text-primary"}`} />
                   </div>
-                </ConicCard>
+                  <h3 className="text-lg font-mono font-bold text-white mb-3">{c.title}</h3>
+                  <p className="text-white/40 font-mono text-sm leading-relaxed mb-6">{c.desc}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {c.tags.map(tag => (
+                      <span key={tag} className={`px-2 py-1 rounded text-[10px] font-mono border ${
+                        isSecondary
+                          ? "text-secondary/70 border-secondary/15 bg-secondary/5"
+                          : "text-primary/70 border-primary/15 bg-primary/5"
+                      }`}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </FadeIn>
             );
           })}
@@ -376,20 +317,16 @@ export default function Landing() {
       </section>
 
       {/* ── THE PRODUCT ── */}
-      <section className="py-16 md:py-32 px-4 sm:px-6 md:px-12 border-y border-white/5 bg-white/[0.01]">
+      <section className="py-32 px-6 md:px-12 border-y border-white/5 bg-white/[0.01]">
         <div className="max-w-7xl mx-auto">
           <FadeIn className="text-center mb-16">
             <SectionLabel>The Product</SectionLabel>
-            <h2 className="font-pixel text-2xl sm:text-3xl md:text-4xl text-jade-ombre">
-              Built for the<br /><span className="text-jade-ombre">anonymous web.</span>
+            <h2 className="text-4xl md:text-5xl font-mono font-bold">
+              Built for the<br /><span className="text-primary">anonymous web.</span>
             </h2>
           </FadeIn>
           <FadeIn delay={0.1}>
-            <LiveDemo />
-          </FadeIn>
-          {/* Legacy static preview kept below for reference — unreachable. */}
-          <FadeIn delay={9999} className="hidden">
-            <div className="rounded-2xl border border-white/10 bg-[#0a0a0a] overflow-hidden">
+            <div className="rounded-2xl border border-white/10 bg-[#0a0a0a] overflow-hidden" style={{ boxShadow: "0 0 80px rgba(57,255,20,0.04)" }}>
               {/* Fake app TopBar */}
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/8 bg-black/40">
                 <div className="flex items-center gap-2">
@@ -494,14 +431,14 @@ export default function Landing() {
       </section>
 
       {/* ── ARCHITECTURE & SECURITY ── */}
-      <section className="py-16 md:py-32 px-4 sm:px-6 md:px-12 max-w-7xl mx-auto">
+      <section className="py-32 px-6 md:px-12 max-w-7xl mx-auto">
         <div className="grid md:grid-cols-2 gap-16 items-start">
           <FadeIn>
             <SectionLabel>Architecture &amp; Security</SectionLabel>
-            <h2 className="font-pixel text-2xl sm:text-3xl md:text-4xl text-jade-ombre leading-tight mb-6">
-              Engineered for<br /><span className="text-jade-ombre">verifiable privacy.</span>
+            <h2 className="text-4xl md:text-5xl font-mono font-bold leading-tight mb-6">
+              Engineered for<br /><span className="text-primary">verifiable privacy.</span>
             </h2>
-            <p className="font-pixel text-jade/65 text-lg leading-snug mb-10 max-w-md">
+            <p className="text-white/40 font-mono text-sm leading-relaxed mb-10 max-w-md">
               Every component of the ShadowNet stack is designed around the principle of zero data retention. Nothing that could identify you is written to disk at any layer.
             </p>
             <div className="space-y-5">
@@ -548,16 +485,16 @@ export default function Landing() {
       </section>
 
       {/* ── VERIFIABLE PRIVACY WITHOUT IDENTITY ── */}
-      <section className="py-16 md:py-32 px-4 sm:px-6 md:px-12 border-y border-white/5 bg-white/[0.01]">
+      <section className="py-32 px-6 md:px-12 border-y border-white/5 bg-white/[0.01]">
         <div className="max-w-5xl mx-auto">
           <FadeIn className="text-center mb-16">
             <SectionLabel>Verifiable Privacy Without Identity</SectionLabel>
-            <h2 className="font-pixel text-2xl sm:text-3xl md:text-4xl text-jade-ombre leading-tight">
+            <h2 className="text-4xl md:text-5xl font-mono font-bold leading-tight">
               Not just a VPN.<br />
-              <span className="text-jade-ombre">The entire stack.</span>
+              <span className="text-primary">The entire stack.</span>
             </h2>
-            <p className="font-pixel text-jade/65 text-lg max-w-xl mx-auto mt-6 leading-snug">
-              A VPN hides your IP. ShadowNet hides everything — your device, your session, your keys, and your identity across every layer of the stack.
+            <p className="text-white/40 font-mono text-sm max-w-xl mx-auto mt-6 leading-relaxed">
+              A VPN hides your IP. ShadowNet hides everything: your device fingerprint, your session, your keys, and your identity across every layer of the stack.
             </p>
           </FadeIn>
           <FadeIn delay={0.15}>
@@ -599,11 +536,11 @@ export default function Landing() {
         <div className="absolute inset-0 bg-gradient-to-b from-[#050505] via-transparent to-[#050505] pointer-events-none" />
         <div className="relative z-10 max-w-3xl mx-auto">
           <FadeIn>
-            <h2 className="pixel-crisp text-jade-ombre text-5xl md:text-7xl leading-[0.9] mb-8">
+            <h2 className="text-6xl md:text-8xl font-mono font-bold leading-[0.9] mb-8">
               ENTER THE<br />
-              <span className="text-jade-ombre">SHADOW.</span>
+              <span className="text-primary" style={{ textShadow: "0 0 60px rgba(57,255,20,0.5)" }}>SHADOW.</span>
             </h2>
-            <p className="font-pixel text-jade/70 text-lg mb-12 max-w-md mx-auto leading-snug">
+            <p className="text-white/40 font-mono text-sm mb-12 max-w-md mx-auto leading-relaxed">
               Your fingerprint. Your IP. Your identity. All of it, gone. This is what anonymous access to Web3 looks like.
             </p>
             <Link href="/app/dashboard">
@@ -633,8 +570,11 @@ export default function Landing() {
             <Link href="/docs"><span className="hover:text-white transition-colors cursor-pointer">Privacy</span></Link>
             <Link href="/docs"><span className="hover:text-white transition-colors cursor-pointer">Terms</span></Link>
             <Link href="/docs"><span className="hover:text-white transition-colors cursor-pointer">Security</span></Link>
-            <a href="https://x.com/shadownetsol?s=21" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
+            <a href="https://x.com/shadownetsol?s=21" target="_blank" rel="noopener noreferrer" aria-label="ShadowNet on X" className="hover:text-white transition-colors">
               <XLogo className="w-4 h-4" />
+            </a>
+            <a href="https://github.com/ShadowNetSOL/ShadowNet" target="_blank" rel="noopener noreferrer" aria-label="ShadowNet on GitHub" className="hover:text-white transition-colors">
+              <Github className="w-4 h-4" />
             </a>
           </div>
         </div>
