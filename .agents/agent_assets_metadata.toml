@@ -36,3 +36,9 @@ id = "CrtTyrYiioZ1IbUh1ls74"
 uri = "file://exports/replit.md"
 type = "text"
 title = "replit.md — paste this into GitHub's conflict editor (replaces ALL content)"
+
+[[outputs]]
+id = "GPS62uJldcsDpJ_ZKyJ7Q"
+uri = "file://exports/shadownet-intel-merge.tar.gz"
+type = "unspecified"
+title = "ShadowNet Intel Merge — for partner agent"
