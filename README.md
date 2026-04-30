@@ -118,7 +118,9 @@
 
   | Doc | What it covers |
   | --- | --- |
+  | [WHY.md](./WHY.md) | Why ShadowNet exists, why now, what makes the design opinionated |
   | [ARCHITECTURE.md](./ARCHITECTURE.md) | System diagram, request lifecycle, orchestrator routing |
+  | [COMPARISON.md](./COMPARISON.md) | How ShadowNet compares to Tor, Brave, VPN+Phantom, mixers, stealth scripts |
   | [SECURITY.md](./SECURITY.md) | Security model, hardening layers, key-management posture |
   | [THREAT_MODEL.md](./THREAT_MODEL.md) | What ShadowNet does and does not defend against |
   | [RELAY.md](./RELAY.md) | Region registry, multi-region deployment, remote-pool tier |
