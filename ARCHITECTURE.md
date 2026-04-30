@@ -11,8 +11,32 @@
      Ultra swap execution.
   4. **Intel engine** for wallet, X (Twitter), and GitHub research.
 
-  This document describes the moving parts and how a request flows
-  through them.
+  The architecture is designed around three load-bearing ideas. Every
+  later section is a consequence of these:
+
+  1. **Coherent identity, not random identity.** A spoofed fingerprint
+     is worthless if the page-level shim says one thing and the outgoing
+     HTTP headers say another. We ship atomic preset bundles
+     (UA + platform + WebGL vendor/renderer + fonts + screen + hardware
+     concurrency + timezone + locale) that lock together at session
+     creation and apply consistently in both the page and the bare
+     server. This eliminates the most common class of stealth-tool
+     detection in a single design choice.
+  2. **Routing as a first-class capability.** A privacy product that
+     only handles the easy 80% of destinations is a marketing demo. The
+     ShadowNet orchestrator continuously decides whether each request
+     should ride the cheap in-region proxy tier or escalate to a
+     disposable Chromium in a remote-browser pool. The decision uses a
+     failure classifier, per-host history, an optional precheck verdict,
+     and the caller's holder-tier entitlement. Users never have to think
+     about it.
+  3. **No keys, no logs, no per-user state.** The server has no wallet
+     endpoint, the bare server logs hostname and HTTP status only, and
+     the session store lives in memory. There is nothing to subpoena,
+     leak, or sell.
+
+  This document describes how those ideas are realised in code, and how
+  a single request flows through the system end to end.
 
   ---
 
@@ -199,7 +223,8 @@
   - Independent third-party audit of the relay and orchestrator code.
   - Reproducible client builds.
   - Wider geographic distribution.
-  - Open-source reference implementation of the remote-browser pool.
+  - Open-source reference implementation of the remote-browser pool, so
+    community operators can run additional capacity.
 
   See [STATUS.md](./STATUS.md) for the current state and
   [CHANGELOG.md](./CHANGELOG.md) for release notes.
