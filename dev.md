@@ -131,6 +131,30 @@ No DB persistence for tracked wallets — privacy-first by design.
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
 
+## Remote `main` State (post full-sync, commit `b38ef65`)
+
+Partner agent's diverged fork was full-merged into `main` on Apr 30 2026 via the GitHub Git Data API (single commit `b38ef65`, parent `d33e55b`). 226 files updated/added, with `base_tree` preservation so files only on remote `main` (e.g. `artifacts/api-server/src/routes/proxy.ts`) stayed intact.
+
+**What partner brought (now on `main`):**
+- Twitter API v2 X-account scanner: `lib/twitterApi.ts`, `lib/xScanCache.ts`, `lib/addressExtract.ts` powering `POST /api/intelligence/x-ca` + `POST /api/intelligence/smart-followers`.
+- Additional intelligence libs: `alpha-score.ts`, `classify.ts`, `entitlement.ts`, `fingerprintPresets.ts`, `holderClaim.ts`, `hostHistory.ts`, `metrics.ts`, `regions.ts`, `remotePool.ts`, `routingScore.ts`, `sessionStore.ts`, `uptime.ts`.
+- Routes: `admin.ts`, `auth.ts`, `orchestrator.ts`, `stallReport.ts`, `trading.ts`.
+- Pages: `chart.tsx`, `remote.tsx`, `trading.tsx` under `artifacts/shadownet/src/pages/app/`.
+- Top-level docs/config: `ARCHITECTURE.md`, `CHANGELOG.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `dev.md`, `RELAY.md`, `SECURITY.md`, `STATUS.md`, `THREAT_MODEL.md`, `Workspace.md`, `Procfile`, `railway.json`, `.env.example`.
+
+**What we kept as ours (overrode partner's versions in this commit):**
+- `artifacts/api-server/src/routes/intelligence.ts` — merged route file, 1668 lines. Order: partner's prelude → `/x-ca` (partner) → `/smart-followers` (partner) → `/wallet` (ours) → `/wallet/onchain` (ours) → `/github-scan` (ours, with full 407-line GitHub helper block: `fetchOwnerInfo`, `fetchCommitTimestamps`, `fetchTopContributors`, `fetchCommitMessages`, `extractMintsFromText`, `GithubRepoMeta`). `cacheGet` collision resolved via `import { cacheGet as memCacheGet, cacheSet } from "../lib/cache.js"` and `ghJsonCached` updated to call `memCacheGet`.
+- `artifacts/shadownet/src/pages/app/intel.tsx` — merged page, 1856 lines. Ours as base (archetype UI, scam-pattern panels, score history, cross-signal display) with partner's full `XAccountScanner` section spliced in (`ChainTag`, `MultiChainAddress`, `XCAResult`, `SmartFollowersResult`, `CHAIN_META`).
+- `lib/cache.ts` — kept ours (returns `T | undefined`). Partner's variant returned `T | null`, which would silently break the merged `ghJsonCached`'s `if (hit !== undefined)` cache-hit check.
+- `lib/history.ts`, `lib/wallet-archetype.ts`, `lib/github-trust.ts` — kept ours (richer behavior; signatures match what our routes call). Verified safe: partner does not import these libs from anywhere besides `intelligence.ts`, so swapping them in has no cross-cutting impact.
+- `lib/cross-signal.ts` — byte-identical between forks; included from ours just for hygiene.
+
+**What was deliberately excluded from the push:**
+- `image (5).jpg` (250KB junk image), `shadownet-session-changes2-bundle.tar.gz` (54KB old bundle), `attached_assets/*` (7.7MB of partner agent's chat screenshots), `.dev`, `.devv` (Replit-local dotfiles).
+- Total payload after filter: 226 files, ~3.5MB uncompressed; tree-creation request body was 1.75MB.
+
+**Local working tree drift:** the local repo is still on the pre-push HEAD (`d33e55b`). Pulling locally is left to the user since destructive git ops are sandbox-blocked.
+
 ## CI / Build Notes
 
 The repo uses a remote-only GitHub Actions workflow (`.github/workflows/ci.yml` lives only on the `main` branch on GitHub) that runs `pnpm install --frozen-lockfile && pnpm run typecheck && pnpm run build` on Node 20 / pnpm 9. Three things are required for CI to stay green:
