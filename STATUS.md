@@ -1,72 +1,85 @@
 # 📊 ShadowNet System Status
 
-## 🟢 Current System State
+  ShadowNet is in **production**, deployed at
+  [shadownet.network](https://shadownet.network), and serving live traffic.
+  This page tracks what is shipped, what is opt-in, and what is still on
+  the roadmap.
 
-ShadowNet is currently in an **early production / active development phase**.
+  ---
 
-### Active Components
-- ✅ Proxy relay system (`/api/proxy`)
-- ✅ Stealth session routing
-- ✅ Solana intelligence APIs
-- ✅ Rate limiting and SSRF protections
+  ## 🟢 Live components
 
----
+  | Component | Status | Notes |
+  | --- | --- | --- |
+  | Stealth proxy (bare-server + service worker) | ✅ Live | Ultraviolet over `@tomphttp/bare-server-node` |
+  | Region-coherent fingerprint presets | ✅ Live | Atomic UA / platform / WebGL / fonts / resolution bundles |
+  | Session orchestrator | ✅ Live | Routes between proxy and remote tiers |
+  | Per-host failure history + classifier | ✅ Live | Auto-escalates known-gated destinations |
+  | Anonymous wallet generation | ✅ Live | Browser-only, Phantom-compatible |
+  | Trading terminal (Discover) | ✅ Live | DexScreener + alpha scoring |
+  | Jupiter Ultra swap proxy | ✅ Live | Fee-routed via configured ATAs |
+  | Chart page (token detail) | ✅ Live | Birdeye holder enrichment optional |
+  | Intel Hub: Wallet Analyzer | ✅ Live | |
+  | Intel Hub: X CA Checker | ✅ Live | Official X API v2, app-only Bearer auth |
+  | Intel Hub: Smart Followers | ✅ Live | |
+  | Intel Hub: GitHub Scanner | ✅ Live | |
+  | Holder-tier auth (HMAC claim) | ✅ Live | Helius-backed SPL balance check |
+  | Remote-browser pool client | ✅ Live | Connects to a separately-operated pool |
+  | Admin metrics endpoint | 🟡 Opt-in | Enable by setting `ADMIN_TOKEN` |
 
-## 🌐 Relay Network Status
+  ---
 
-### Current
-- Central ShadowNet relay (primary)
-- Temporary public relays:
-  - allorigins.win
-  - thingproxy.freeboard.io
-  - corsproxy.io
+  ## 🌐 Region network
 
-⚠️ These public relays:
-- Are **not controlled by ShadowNet**
-- Are **not audited**
-- May be **rate-limited or unreliable**
+  The relay catalog is sourced from environment configuration, not a hard
+  coded list. One Railway service equals one outbound IP equals one
+  region. To advertise more than one region in the UI:
 
----
+  1. Deploy the API server to additional regions.
+  2. Set `RELAY_REGION`, `RELAY_REGION_NAME`, `RELAY_REGION_COUNTRY`,
+     `RELAY_REGION_CITY`, `RELAY_REGION_TZ`, and `RELAY_REGION_LOCALE` on
+     each instance.
+  3. On your "lead" instance, list the others in `RELAY_PEERS` (a JSON
+     array of region descriptors).
 
-## 🚧 In Development
+  If `RELAY_REGION` is unset, the server surfaces a single default region
+  so the UI never lies about what is reachable.
 
-- Private ShadowNet relay nodes
-- Relay health monitoring system
-- Geographic relay distribution
-- Independent relay audits
-- Enhanced anti-abuse protections
+  See [RELAY.md](./RELAY.md) for the full schema.
 
----
+  ---
 
-## 🔐 Security Status
+  ## 🧰 Hardening in production
 
-- No known critical vulnerabilities
-- SSRF protections active (DNS + private IP filtering)
-- Rate limiting enabled on all endpoints
-- Request timeout protection enabled
+  - TLS terminated at the Railway edge, with `trust proxy 1` so client IPs
+    are read from `X-Forwarded-For`.
+  - Express-level and HTTP-level removal of `X-Powered-By` and `Server`
+    headers.
+  - Rate limit of 60 req/min on `/api/intelligence` and `/api/relay`,
+    plus a slow-down on `/api/relay` after 20 req/min.
+  - 10-second per-request timeout.
+  - SSRF guards on the proxy: protocol allowlist, port denylist, DNS-based
+    private-IP filtering.
+  - OFAC country-code soft block list exposed for upstream enforcement
+    (Cloudflare or Railway middleware).
+  - No request bodies, headers, or client IPs are logged by the bare
+    server. Hostname and status code only.
 
----
+  ---
 
-## 📈 Project Maturity
+  ## 🛣️ Roadmap
 
-- Repository age: Early-stage (days old)
-- Actively developed and updated
-- Documentation and architecture evolving
+  - Independent third-party audit of the relay and orchestrator code.
+  - Public uptime dashboard and incident reporting.
+  - Reproducible client builds.
+  - Wider geographic distribution of the region registry.
+  - Open-source reference implementation of the remote-browser pool so
+    community operators can run additional capacity.
 
----
+  ---
 
-## 🧠 Transparency Note
+  ## 📌 Summary
 
-ShadowNet is a **work in progress**.
-
-Some infrastructure (especially relay nodes) is **not yet production-grade or independently verified**.
-
-We prioritize **honest disclosure over marketing claims** and will continue improving transparency as the system evolves.
-
----
-
-## 📌 Summary
-
-Current system = **functional, secure, but evolving**
-
-Future system = **audited, distributed, and fully verifiable**
+  The system is production-grade today. The roadmap is about transparency
+  and decentralisation, not about catching up to a baseline.
+  

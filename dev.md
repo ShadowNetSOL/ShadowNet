@@ -1,96 +1,161 @@
-# Workspace
+# Local development
 
-## Overview
+  This guide covers running ShadowNet on your machine, the environment
+  variables you need, and the codegen workflow that keeps the frontend
+  and backend type-aligned.
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+  ## Prerequisites
 
-## Stack
+  | Tool | Version |
+  | --- | --- |
+  | Node | 24.x (see `.nvmrc`) |
+  | pnpm | 9.x or later |
+  | Postgres | optional, only required if you wire DB-backed features locally |
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+  ## First-run setup
 
-## Structure
+  ```bash
+  pnpm install
+  ```
 
-```text
-artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
-├── lib/                    # Shared libraries
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
-```
+  The monorepo uses pnpm workspaces. `pnpm install` will hydrate
+  `node_modules` for every artifact in `artifacts/` and every shared
+  library in `lib/`.
 
-## TypeScript & Composite Projects
+  ## Running everything
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+  ```bash
+  pnpm run dev
+  ```
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+  This boots all artifacts in parallel via the workflow runner:
 
-## Root Scripts
+  - `artifacts/api-server` (Express + bare server) on the `PORT`
+    environment variable.
+  - `artifacts/shadownet` (Vite SPA) on its own port. The Vite config
+    reads `PORT` from the environment, so do not hard-code a port in
+    the dev server.
+  - `artifacts/mockup-sandbox` (component preview server) for design
+    iteration.
 
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
+  ## Environment variables
 
-## Packages
+  A complete reference lives in [`.env.example`](./.env.example). The
+  short version, grouped by capability:
 
-### `artifacts/api-server` (`@workspace/api-server`)
+  ### Required for the API server to boot
 
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
+  - `PORT` (injected by the platform)
 
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+  ### Required for the holder tier
 
-### `lib/db` (`@workspace/db`)
+  - `HELIUS_API_KEY` for the SPL balance check.
+  - `ENTITLEMENT_MINT` for the gating mint address.
+  - `ENTITLEMENT_MIN_BALANCE` (defaults to `1`).
+  - `CLAIM_SIGNING_KEY` for HMAC-signing claim tokens.
+    In dev, a process-lifetime key is generated automatically. In
+    production this MUST be set to a stable secret.
 
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
+  ### Required for trading and swaps
 
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
+  - `SOLANA_RPC` for the trading-side Solana mainnet RPC.
+  - `SOLANA_RPC_URL` for the intelligence-side Solana RPC.
+    These can point at the same provider; they are kept distinct so
+    you can rate-limit trading separately if you need to.
+  - `JUPITER_API_KEY` for Jupiter Ultra Swap.
+  - `FEE_WALLET` for the platform-fee receiver pubkey.
+  - `FEE_ACCOUNT_WSOL`, `FEE_ACCOUNT_USDC`, `FEE_ACCOUNT_USDT` for
+    pre-created ATAs that fees route into.
+  - `PLATFORM_FEE_BPS` defaults to `100` (1%). Capped at `255` per
+    Jupiter's Ultra contract.
 
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
+  ### Required for Intel Hub features
 
-### `lib/api-spec` (`@workspace/api-spec`)
+  - `TWITTER_API_BEARER` for the X CA Checker (X API v2, app-only Bearer).
+  - `GITHUB_TOKEN` for the GitHub Scanner (read-only public-repo scope is
+    sufficient).
+  - `OPENAI_API_KEY` (or `AI_INTEGRATIONS_OPENAI_API_KEY` if you use the
+    Replit AI integration) for AI-assisted classification.
+  - `AI_MODEL` to pin the model id, optional.
 
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
+  ### Region descriptor (multi-region deploys)
 
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
+  - `RELAY_REGION`, `RELAY_REGION_NAME`, `RELAY_REGION_COUNTRY`,
+    `RELAY_REGION_CITY`, `RELAY_REGION_TZ`, `RELAY_REGION_LOCALE` for
+    this instance's region.
+  - `RELAY_PEERS` (lead instance only) is a JSON array of peer
+    descriptors. See [RELAY.md](./RELAY.md) for the schema.
 
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
+  ### Remote-browser pool (optional)
 
-### `lib/api-zod` (`@workspace/api-zod`)
+  - `REMOTE_BROWSER_POOL_URL` for the pool's HTTP endpoint.
+  - `REMOTE_BROWSER_POOL_TOKEN` for the bearer token.
 
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
+  ### Operator endpoints (optional)
 
-### `lib/api-client-react` (`@workspace/api-client-react`)
+  - `ADMIN_TOKEN` enables `/api/admin/metrics` with bearer auth.
+  - `FORCE_REMOTE_FOR_HOSTS` is a comma-separated host list that
+    short-circuits the orchestrator straight to the remote tier.
 
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
+  ### Local convenience
 
-### `scripts` (`@workspace/scripts`)
+  - `STATIC_DIR` overrides where the production server expects to find
+    the built frontend. Used in dev only.
 
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+  ## Codegen workflow
+
+  ShadowNet's API contract lives in `lib/api-spec` as an OpenAPI
+  document. From it we generate:
+
+  - `lib/api-zod` Zod schemas, used by the API server for request and
+    response validation.
+  - `lib/api-client-react` React Query hooks consumed by the frontend.
+
+  Whenever you change the OpenAPI spec, regenerate:
+
+  ```bash
+  pnpm --filter @workspace/api-spec run codegen
+  ```
+
+  The generated files are committed. Do not edit them by hand.
+
+  ## Project structure
+
+  ```text
+  .
+  ├── artifacts/
+  │   ├── api-server/         # Express + bare server
+  │   ├── mockup-sandbox/     # Component preview server
+  │   └── shadownet/          # Vite SPA (React + Wouter)
+  ├── lib/
+  │   ├── api-spec/           # OpenAPI source
+  │   ├── api-zod/            # Generated Zod schemas
+  │   ├── api-client-react/   # Generated React Query hooks
+  │   └── db/                 # Drizzle schema (optional features)
+  ├── scripts/                # Workspace utility scripts
+  └── .env.example
+  ```
+
+  See [Workspace.md](./Workspace.md) for the full pnpm workspace layout
+  and conventions.
+
+  ## Troubleshooting
+
+  **Vite preview is blank.** Make sure the dev server reads `PORT` from
+  the environment. A hard-coded port collides with the platform's
+  per-artifact port assignments.
+
+  **Bare server returns 5xx for every request.** Check that
+  `OFAC_BLOCKED_CC` is not silently filtering, and that your local DNS
+  resolves the destination. The proxy refuses any host that resolves to
+  a private IP.
+
+  **Holder claim issuance fails in dev.** `ENTITLEMENT_DISABLED=true`
+  skips the on-chain check and grants the holder tier to any
+  signature-verified wallet. Use this for pre-launch and dev only;
+  NEVER set it in production.
+
+  **Trading endpoints return 503.** Confirm `JUPITER_API_KEY`,
+  `SOLANA_RPC`, `FEE_WALLET`, and the three `FEE_ACCOUNT_*` ATAs are
+  populated.
+  

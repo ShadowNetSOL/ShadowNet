@@ -1,130 +1,155 @@
 # Workspace
 
-## Overview
+  ShadowNet is a pnpm workspace monorepo. Each artifact (deployable
+  application) lives under `artifacts/`. Each shared library lives
+  under `lib/`. TypeScript project references stitch the dependency
+  graph together so type-checks are incremental and code generation
+  flows from a single OpenAPI source of truth.
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+  ## Stack
 
-## Stack
+  | Layer | Choice |
+  | --- | --- |
+  | Monorepo | pnpm workspaces |
+  | Node | 24.x |
+  | Package manager | pnpm 9.x |
+  | TypeScript | 5.9 |
+  | Frontend | React 18, Vite 5, Wouter, Tailwind, Framer Motion |
+  | API framework | Express 5 |
+  | Stealth proxy | Ultraviolet over `@tomphttp/bare-server-node` |
+  | Database (optional) | PostgreSQL via Drizzle ORM |
+  | Validation | Zod (`zod/v4`), `drizzle-zod` |
+  | API codegen | Orval, generating from OpenAPI |
+  | Build | esbuild for the server CJS bundle, Vite for client bundles |
+  | Hosting | Railway, one service per region |
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+  ## Layout
 
-## Structure
+  ```text
+  shadownet-monorepo/
+  ├── artifacts/                 # Deployable applications
+  │   ├── api-server/            # Express + bare server (Node)
+  │   ├── mockup-sandbox/        # Vite component preview server
+  │   └── shadownet/             # Vite SPA (React + Wouter)
+  ├── lib/                       # Shared libraries
+  │   ├── api-spec/              # OpenAPI document + Orval config
+  │   ├── api-zod/               # Generated Zod schemas
+  │   ├── api-client-react/      # Generated React Query hooks
+  │   └── db/                    # Drizzle schema and DB connection
+  ├── scripts/                   # Workspace utility scripts
+  ├── .env.example               # Authoritative env reference
+  ├── pnpm-workspace.yaml
+  ├── tsconfig.base.json
+  ├── tsconfig.json
+  └── package.json
+  ```
 
-```text
-artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
-├── lib/                    # Shared libraries
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
-```
+  ## Artifacts
 
-## TypeScript & Composite Projects
+  ### `artifacts/api-server`
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+  Express 5 application that serves three things:
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+  1. `/api/*` JSON control plane (sessions, orchestrator, relay catalog,
+     trading, intelligence, auth, admin).
+  2. `/bare/*` Ultraviolet bare server for stealth proxy traffic.
+  3. The built frontend SPA, served from the same origin so the service
+     worker boots from the same domain as `/bare/`.
 
-## Root Scripts
+  Entry point: `src/index.ts`. The HTTP server intercepts `/bare/*`
+  before passing to the Express app, and also handles `upgrade` events
+  for WebSocket pass-through.
 
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
+  ### `artifacts/shadownet`
 
-## Packages
+  Vite + React + Wouter SPA. Pages live under `src/pages`:
 
-### `artifacts/api-server` (`@workspace/api-server`)
+  - `landing.tsx`, `docs.tsx` for marketing surfaces.
+  - `pages/app/sessions.tsx` for stealth-session control.
+  - `pages/app/wallet.tsx` for browser-side keypair generation.
+  - `pages/app/relay.tsx` for the region directory.
+  - `pages/app/trading.tsx` for the Discover token list.
+  - `pages/app/chart.tsx` for the per-token detail view.
+  - `pages/app/intel.tsx` for the Intel Hub.
+  - `pages/app/remote.tsx` for the holder-tier remote browser surface.
+  - `pages/app/dashboard.tsx` for the holder hub.
 
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
+  The service worker lives at `public/uv/sw.js`. It is registered by
+  `pages/app/sessions.tsx` (and the remote/proxy boot flow) and
+  intercepts every fetch the page makes once a stealth session is active.
 
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+  ### `artifacts/mockup-sandbox`
 
-### `lib/db` (`@workspace/db`)
+  Vite-based component preview server used during design iteration. Each
+  component gets its own URL for iframe embedding. Not deployed to
+  production; this artifact only runs locally.
 
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
+  ## Shared libraries
 
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
+  ### `lib/api-spec`
 
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
+  OpenAPI document describing every `/api/*` endpoint plus all request
+  and response shapes. The single source of truth for the API contract.
 
-### `lib/api-spec` (`@workspace/api-spec`)
+  Run `pnpm --filter @workspace/api-spec run codegen` to regenerate
+  `api-zod` and `api-client-react` after changes.
 
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
+  ### `lib/api-zod`
 
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
+  Generated Zod schemas. The API server uses them to validate request
+  bodies and response payloads. Do not edit by hand.
 
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
+  ### `lib/api-client-react`
 
-### `lib/api-zod` (`@workspace/api-zod`)
+  Generated React Query hooks. The frontend imports typed hooks from
+  here for every `/api/*` endpoint it calls. Do not edit by hand.
 
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
+  ### `lib/db`
 
-### `lib/api-client-react` (`@workspace/api-client-react`)
+  Drizzle ORM schema and database connection helpers. Optional. Required
+  only by features that opt into Postgres-backed storage.
 
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
+  ## TypeScript project references
 
-### `artifacts/shadownet` (`@workspace/shadownet`)
+  `tsconfig.json` references every artifact and library so a single
+  `pnpm run typecheck` walks the entire dependency graph. Each package
+  has its own `tsconfig.json` extending `tsconfig.base.json`.
 
-ShadowNet — privacy-native Solana Web3 toolkit. Dark theme (#050505), neon green primary (#39FF14), purple secondary (#8B5CF6), monospace.
+  ## Adding a new artifact
 
-Key pages (in `src/pages/app/`):
-- `dash` — main dashboard
-- `stealth` — Stealth Sessions (Tor-like relay routing)
-- `wallet` — privacy-first non-custodial wallet (keys stored client-side only via `lib/wallet.ts`)
-- `relay` — relay node listings
-- `intel` — Intelligence Hub with 3 sub-tools:
-  - **WALLET** — Wallet Analyzer with two tabs:
-    - **ANALYZE**: AI-written brief, Score, Portfolio, Holdings, **Dev Tokens** (coins launched by this wallet, derived from `initializeMint`/`initializeMint2` instructions in the wallet's recent txs), and a **TRACK WALLET** button
-    - **TRACKED**: list of tracked wallets (stored ONLY in `localStorage` under `shadownet:tracked-wallets`, never sent to the server) with per-wallet activity feed; polls every 45s, fires browser Notifications on new buy/sell events using monotonic request IDs to avoid stale/duplicate notifications
-  - **X** — Unified X Account Intelligence (single `XAccountScanner` component): one `@username` input → one scan that returns Profile, Username History, Posted Contract Addresses, and Smart Followers. Backend integration pending (UI shows a coming-soon notice with a 4-card preview of the sections each scan produces).
-  - **GITHUB** — Repo trust scanner
+  1. Scaffold under `artifacts/<name>/` with its own `package.json`.
+  2. Register the artifact through the artifacts skill so the workflow
+     runner knows how to start it.
+  3. Pick a unique `slug` and matching `previewPath`.
+  4. Make the dev server read `PORT` from the environment so per-artifact
+     port assignments do not collide.
 
-Backend endpoints (in `artifacts/api-server/src/routes/intelligence.ts`):
-- `POST /api/intelligence/wallet` — RPC fan-out (balance, tokens, recent sigs) with `aiSummary` (OpenAI gpt-5.4 with 8s timeout + heuristic fallback)
-- `POST /api/intelligence/wallet/onchain` — batches `getParsedTransactions` (chunks of 20, up to 200 sigs); detects dev tokens via `initializeMint*` where `mintAuthority===wallet`; classifies activity as BUY/SELL/RECEIVE/SEND using SOL+stables ("value-like") vs. other token deltas; skips failed txs (`meta.err != null`)
-- `POST /api/intelligence/github` — GitHub repo trust scanner
-- `POST /api/intelligence/x-ca`, `POST /api/intelligence/smart-followers` — legacy X stubs (no longer reachable from the unified X tab UI; kept for now until a single unified X endpoint is implemented)
+  ## Adding a shared library
 
-No DB persistence for tracked wallets — privacy-first by design.
+  1. Scaffold under `lib/<name>/` with its own `package.json` and
+     `tsconfig.json` extending `tsconfig.base.json`.
+  2. Add it to the `pnpm-workspace.yaml` packages list (already wildcarded
+     for `lib/*`, no edit usually required).
+  3. Add it as a TypeScript project reference in the consuming package's
+     `tsconfig.json`.
+  4. Import via the `@workspace/<name>` alias declared in the root
+     `pnpm-workspace.yaml`.
 
-### `scripts` (`@workspace/scripts`)
+  ## CI
 
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+  GitHub Actions runs typecheck and build on every push to `main` and
+  every PR. Dependabot tracks npm and GitHub Actions updates. The
+  relevant workflow files live in `.github/workflows/`.
 
-## CI / Build Notes
+  ## Conventions
 
-The repo uses a remote-only GitHub Actions workflow (`.github/workflows/ci.yml` lives only on the `main` branch on GitHub) that runs `pnpm install --frozen-lockfile && pnpm run typecheck && pnpm run build` on Node 20 / pnpm 9. Three things are required for CI to stay green:
+  - TypeScript strict, no implicit `any`, no `require`, no
+    commented-out code.
+  - One logical change per PR.
+  - Update `.env.example` whenever a new `process.env.<VAR>` reference
+    appears in code.
+  - Update the relevant doc whenever a user-visible behaviour changes.
 
-1. **`pnpm.overrides` must be present in BOTH `pnpm-workspace.yaml` AND root `package.json`.** Even though pnpm 9.5+ honors `overrides:` in `pnpm-workspace.yaml`, older pnpm 9.x patches don't. `pnpm-lock.yaml` records 81 platform-binary overrides (esbuild / lightningcss / @rollup native modules / @oxide / @ngrok darwin/freebsd/linux/win32/sunos binaries, plus `esbuild@0.27.3` and `@esbuild-kit/esm-loader → tsx@^4.21.0`) — the two override blocks must stay byte-identical with the lockfile or `--frozen-lockfile` will reject install with "overrides configuration doesn't match lockfile."
-
-2. **Express handlers in `artifacts/api-server` use `return void res.status(N).json(...)` / `return void res.json(...)`** so every code path returns `undefined` and the handler signature stays consistent under `noImplicitReturns` (TS7030). Don't reintroduce `return res.status(N).json(...)` — the bare `return res.json` form makes one branch return `Response` while success paths return `void`, and TS errors out.
-
-3. **Vite configs (`artifacts/shadownet/vite.config.ts`, `artifacts/mockup-sandbox/vite.config.ts`) gate the `PORT` / `BASE_PATH` requirement on `process.argv.includes("build")`.** `vite build` produces static assets and doesn't need a port; CI compile-checks would otherwise fail because they don't set those env vars. Dev/preview still requires both strictly. Production deploys on Replit infrastructure inject the correct `BASE_PATH` per artifact, so the `'/'` build-time default only applies to CI compile-checks (whose output is never deployed).
+  See [CONTRIBUTING.md](./CONTRIBUTING.md) for the PR workflow and
+  [ARCHITECTURE.md](./ARCHITECTURE.md) for the runtime architecture.
+  
