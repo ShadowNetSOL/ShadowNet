@@ -1,0 +1,71 @@
+OK let me verify by reading the actual current state of intelligence.ts on main. The co-builder's AI claims it's already there — if true, I should pivot.
+
+Used get file contents
+I verified main's state. Here's the actual ground truth:
+
+Reality check on co-builder AI's claim
+Their claim: "all 5 lib modules + 66KB intelligence.ts with X scanner already merged."
+
+Partially right, partially wrong:
+
+Item Their claim Truth
+cache.ts, history.ts, wallet-archetype.ts, cross-signal.ts, github-trust.ts Already on main ✅ TRUE — I pushed them earlier today; they are now on main
+intelligence.ts "already has X scanner" Already merged ✅ TRUE — but it's the Twitter API v2 version (using twitterApi.ts lib), not the bundle's nitter version
+intelligence.ts already uses bundle's scam-pattern / cross-signal / wallet-PnL features Implied ❌ FALSE — current intelligence.ts does NOT import cache/history/wallet-archetype/github-trust/cross-signal
+intel.tsx has new UI panels Assumed ❌ Hasn't been updated either
+So they conflated two things: the X scanner (already in main, using Twitter API v2) and the bundle's NEW intel features (scam tiers, cross-signal hooks, wallet PnL/archetype/copy-trade) which are NOT yet wired into intelligence.ts or intel.tsx.
+
+What you actually need
+The bundle's intelligence.ts and intel.tsx need a 3-way merge, not a drop-in replace:
+
+Keep main's Twitter API v2 X scanner (getUserByUsername, getUserTweets, getFollowers)
+Add bundle's new endpoints:
+/intelligence/wallet/onchain — dev tokens, BUY/SELL activity, PnL, archetype, copy-trade signal
+Enhanced /intelligence/wallet — score history, archetype, cross-signals
+Enhanced /intelligence/github-scan — scam-pattern severity tiers, structural risk, cross-signals
+Replace the old nitter-based /x-ca and /smart-followers with main's Twitter API v2 versions (which is what's there now)
+The merged file is ~70-80KB. I cannot push that inline — my output stream times out around 25KB.
+
+✅ Have your co-builder's AI do it
+They explicitly said: "I can push files of any size directly to the repo via the GitHub Git Data API." That's the right tool. Tell them:
+
+Merge bundle/intelligence.ts (route logic) on top of main:intelligence.ts (Twitter API v2 X scanner) — keep main's /x-ca and /smart-followers Twitter v2 implementations, replace /wallet, add /wallet/onchain, replace /github-scan with bundle's full version. Same merge for intel.tsx. Push via Git Data API.
+
+Then they push, you redeploy, and ALL the bundle features go live.
+
+What I've actually shipped today (recap)
+PR #22 merged — entitlement bypass + env doc
+PR #25 open — relay UI killed + alpha-score module + trading.ts now uses Jupiter v2 holders + alphaScore
+5 helper modules pushed and merged (cache, history, wallet-archetype, cross-signal, github-trust)
+Updated todos
+Next from my side
+Starting F (frontend security audit) now — won't conflict with the co-builder's intelligence.ts/intel.tsx work. Want me to proceed?
+
+yes keep moing
+
+Launching the security audit in background.
+
+Ran agent
+Frontend security audit on shadownet
+Security audit launched in background. I'll get pinged when it returns.
+
+Where things stand
+✅ Done this session:
+
+PR #22 merged — entitlement bypass + env doc
+PR #25 open — relay UI killed + alpha-score module + trading.ts now uses Jupiter v2 holders + alphaScore
+5 helper modules merged (cache, history, wallet-archetype, cross-signal, github-trust)
+🔄 In flight:
+
+Security audit agent running (will report frontend exposure, service worker scope fix, etc.)
+Bundle merge for intelligence.ts + intel.tsx — your co-builder's AI is best positioned to do this (they have Git Data API access, no inline-upload size limit)
+⏳ Waiting on you:
+
+Set Railway env vars + redeploy:
+SOLANA_RPC=https://mainnet.helius-rpc.com/?api-key=<key>
+HELIUS_API_KEY=<key>
+TWITTER_API_BEARER=<token>
+ENTITLEMENT_DISABLED=true
+CLAIM_SIGNING_KEY=<your generated value>
+Merge PR #25 when ready
+Will ping when audit lands.
