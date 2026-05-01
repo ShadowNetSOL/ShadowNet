@@ -39,6 +39,22 @@
 
   ---
 
+  ## Security notice
+
+  ShadowNet is **self-custodial** and **non-custodial**. Wallet
+  generation runs **client-side only**, in your browser. We will
+  never ask you to enter, paste, share, or send your seed phrase,
+  mnemonic, or private key. Not to us, not to Replit, not to any
+  "support" account, not to any dApp. **Treat your seed phrase as a
+  password**: never share it, store it offline, and keep it private.
+  Anyone asking for your recovery words to "verify", "claim", or
+  "migrate" your wallet is phishing you. Our full
+  [threat model](./THREAT_MODEL.md) and
+  [security policy](./SECURITY.md) describe what ShadowNet defends
+  against and what is out of scope.
+
+  ---
+
   ## Status legend
 
   Throughout this README and the supporting docs, every feature is
