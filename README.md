@@ -64,7 +64,7 @@
   | Inline interception script that patches `window.location`, `fetch`, `XMLHttpRequest`, and dynamic `script`/`link` injection so SPA chunks (Next.js, Vite) stay inside the proxy on every navigation | **Live** |
   | Random user-agent rotation per request from a curated pool | **Live** |
   | 60 requests / minute / IP rate limit, plus a 500 ms slow-down after the first 20 requests in a window | **Live** |
-  | Server-side reachability + anti-bot precheck (`/api/relay/verify`) that returns status, latency, page title, content-type, and the relay's outbound IP so users can verify their request actually leaves through ShadowNet infrastructure | **Live** |
+  | Server-side reachability precheck (`/api/relay/verify`) that returns status, latency, page title, content-type, and the relay's outbound IP so users can verify their request actually leaves through ShadowNet infrastructure (note: the precheck currently validates protocol and URL shape only; the same DNS-resolved private-IP and blocked-port guard the main proxy enforces is on the near-term hardening list) | **Live** (hardening pending) |
   | Service-worker proxy on Ultraviolet over a hardened `@tomphttp/bare-server-node`, replacing the legacy iframe rewrite to fix realtime sites and dynamic-import edge cases | **Planned** |
   | Region-coherent fingerprint preset bundles (atomic UA + platform + WebGL vendor/renderer + fonts + screen + timezone + locale, one OS-class per preset) | **Planned** |
   | Two-tier orchestrator that routes each request between the in-region proxy and a remote disposable-Chromium pool based on a failure classifier, per-host history, precheck verdict, and the caller's holder-tier entitlement | **Planned** |
@@ -87,11 +87,11 @@
   | --- | --- |
   | **Wallet Analyzer** — Solana RPC summary with SOL balance, token-account count, recent activity, AI-generated narrative, all under a tiered RPC failover (Helius → publicnode → mainnet-beta) | **Live** |
   | **Wallet Deep-Scan** — concurrent batched parsed-transaction fetch (up to 200 signatures), dev-token discovery, FIFO-cost-basis PnL, and 8-class wallet-archetype classifier (sniper, airdrop farmer, LP, smart money, bag holder, active trader, dormant, normal) | **Live** |
-  | **X CA Checker** — pulls a profile via the official X API v2 (app-only Bearer), extracts every Solana contract address from the bio + recent posts, and adds Wayback Machine snapshot history (firstSeen, lastSeen, possible previous handles) for handle-rebrand detection | **Live** |
-  | **Smart Followers** — scans an account's followers and surfaces the high-signal subset (verified, ratio, account age, intersecting follow-graph) using the X API v2 | **Live** |
+  | **X CA Checker** — pulls a profile via a Nitter mirror, extracts every Solana contract address from the bio and recent posts, and enriches with Wayback Machine snapshot history (firstSeen, lastSeen, possible previous handles) for handle-rebrand detection | **Live** |
+  | **Smart Followers** — heuristic preview that returns a sample high-signal follower set with the upstream-API-required descriptor; full scan over the live follower graph (verified, ratio, account age, intersecting follows) lands once an X API v2 Bearer is wired | **Planned** (preview shipped) |
   | **GitHub Scanner** — repo metadata + AI-driven code review with a structured trust score, dedicated rate limiter (8 / minute), 60-second timeout, and three independent risk passes: scam-pattern detection, anti-gaming (star manipulation), and structural risk | **Live** |
-  | **Cross-signal entity graph** — a memory-bounded graph that links wallets, GitHub repos, and X accounts to mints they touch, then returns a verdict (`SAME_ENTITY_LIKELY` if all three channels overlap, `CONVERGENT_INTEREST` for two-channel overlap, `ISOLATED` otherwise) | **Live** |
-  | Per-endpoint caching with explicit TTLs (10 min for X, in-memory cache layer for AI scans) so repeat lookups return instantly without re-billing the upstream APIs | **Live** |
+  | **Cross-signal entity graph** — memory-bounded graph that links wallets and GitHub repos to mints they touch and returns a verdict (`SAME_ENTITY_LIKELY` for full convergence, `CONVERGENT_INTEREST` for partial overlap, `ISOLATED` otherwise); the X-channel edge type is implemented in the graph library and not yet wired to the live X-CA route | **Live** (wallet ↔ repo edges; X edges Planned) |
+  | Caching with explicit TTLs on the AI / token-metadata layer so repeat scans return instantly without re-billing the upstream provider; per-endpoint result caching across all five routes is rolling out incrementally | **Live** (partial) |
 
   See [INTELLIGENCE.md](./INTELLIGENCE.md) for the full endpoint reference,
   verdict policies, and example payloads.
@@ -159,7 +159,7 @@
   | Backend | Node 24, Express 5, TypeScript 5.9 |
   | Shared | OpenAPI + Orval codegen, Zod runtime validation |
   | Solana | `@solana/web3.js`, Helius RPC (with publicnode + mainnet-beta failover) |
-  | Intelligence | OpenAI / OpenRouter (`gpt-5` default, configurable), X API v2, Dexscreener, Wayback Machine, GitHub REST |
+  | Intelligence | OpenAI / OpenRouter (`gpt-5` default, configurable), Nitter scrape via cheerio (X API v2 Bearer upgrade Planned), Dexscreener, Wayback Machine, GitHub REST |
   | Wallet primitives | `@scure/bip39`, `@noble/hashes`, `@noble/ed25519`, `bs58` |
   | Build | esbuild (server bundle), Vite (client bundle) |
   | Hosting | Railway (today single-region, multi-region planned) |
@@ -171,11 +171,11 @@
   **Mainnet, today (Live):**
 
   - Stealth iframe proxy with SSRF guard, header hygiene, SPA-aware interception
-  - Browser-only Solana wallet generator with audited primitives and runtime preflight
-  - Intelligence Hub: 5 endpoints with caching, cross-signal graph, archetype classifier, GitHub trust scoring
+  - Browser-only Solana wallet generator built on audited primitive libraries with runtime preflight
+  - Intelligence Hub: five endpoints (wallet, wallet/onchain, x-ca, smart-followers, github-scan), wallet ↔ repo cross-signal graph, 8-class archetype classifier, GitHub trust scoring; X data via a Nitter mirror plus Wayback Machine handle history
   - Pump.fun token-discovery feed
-  - Relay-node directory and per-target reachability precheck
-  - Production rate limits, timeouts, and CORS
+  - Relay-node directory (UI display) and per-target reachability precheck
+  - Production rate limits (60 rpm + slow-down + per-endpoint AI limit), timeouts, and CORS
 
   **In active development (Planned):**
 

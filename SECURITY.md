@@ -34,9 +34,12 @@
 
   - Direct IP exposure from the user's browser to third-party sites,
     through the server-side proxy
-  - Server-side request forgery (SSRF), by DNS-checking every proxied
-    hostname against RFC 1918 / loopback / link-local ranges and
-    rejecting non-HTTP(S) protocols and a blocked-port list
+  - Server-side request forgery (SSRF) on the main `/api/proxy` route,
+    by DNS-checking every proxied hostname against RFC 1918 / loopback
+    / link-local ranges and rejecting non-HTTP(S) protocols and a
+    blocked-port list (the same guard is being ported to
+    `/api/relay/verify`, which today validates protocol + URL shape
+    only)
   - Wallet identity correlation, since keys are generated and held in
     the browser using audited primitive libraries
   - Anti-bot wall surprise, through a server-side reachability + page

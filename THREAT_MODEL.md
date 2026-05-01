@@ -37,14 +37,19 @@
   destination sees the API server's outbound IP (verifiable via
   `/api/relay/verify`, which echoes the relay IP), never the user's.
 
-  ### Server-side request forgery (SSRF)
+  ### Server-side request forgery (SSRF) on the main proxy
 
-  Every proxied URL is parsed, the protocol is checked against the
-  `http/https` allowlist, the port is checked against a blocked-port
-  list, and the hostname is DNS-resolved with `dns.lookup({ all: true })`
-  and rejected if it resolves to any address inside RFC 1918, loopback,
-  or link-local ranges. This is a stronger check than a string-based
-  "contains 192.168" filter and catches DNS-rebind attempts.
+  Every URL routed through `/api/proxy` is parsed, the protocol is
+  checked against the `http/https` allowlist, the port is checked
+  against a blocked-port list (22, 25, 3306, 6379), and the hostname
+  is DNS-resolved with `dns.lookup({ all: true })` and rejected if
+  it resolves to any address inside RFC 1918, loopback, or link-local
+  ranges. This is a stronger check than a string-based "contains
+  192.168" filter and catches DNS-rebind attempts.
+
+  The `/api/relay/verify` precheck currently validates protocol and
+  URL shape only; porting the same DNS-resolved private-IP and blocked-
+  port guard to that route is on the near-term hardening list.
 
   ### Header fingerprinting via the default User-Agent
 
@@ -73,14 +78,15 @@
 
   ### On-chain identity laundering by scam coordinators
 
-  The intelligence layer runs three independent signal streams and
-  correlates them in the cross-signal graph: which wallets touched a
-  mint, which repos referenced it in a README, which X accounts posted
-  the CA. The verdict policy ranks results: `SAME_ENTITY_LIKELY` only
-  when all three channels overlap; `CONVERGENT_INTEREST` for two-channel
-  overlap; `ISOLATED` otherwise. Returned wallet addresses are masked
-  (`first4…last4`) so prior-scan addresses are not leaked verbatim
-  to unrelated callers.
+  The intelligence layer maintains a cross-signal graph that links
+  wallets and GitHub repos to mints they touch, and emits a verdict
+  ranking: `SAME_ENTITY_LIKELY` when both channels converge with
+  shared linkage; `CONVERGENT_INTEREST` for partial overlap;
+  `ISOLATED` otherwise. The X-channel edge type is implemented in
+  the graph library and not yet wired to the live X-CA route; once
+  wired, it will participate as a third channel in the verdict
+  policy. Returned wallet addresses are masked (`first4…last4`) so
+  prior-scan addresses are not leaked verbatim to unrelated callers.
 
   ---
 

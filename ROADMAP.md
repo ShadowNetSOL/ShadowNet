@@ -202,8 +202,17 @@
 
   ## Phase 8 — Intelligence Hub expansion
 
-  Add scanning surfaces beyond X / GitHub / on-chain:
+  Harden existing surfaces and add new ones:
 
+  - **X API v2 Bearer upgrade.** Replace the Nitter scrape in `/x-ca`
+    and ship the live follower-graph version of `/smart-followers`.
+    The route shapes are already locked.
+  - **Wire the X-channel edge into the cross-signal graph** so the
+    verdict policy upgrades from a wallet ↔ repo convergence test
+    to a full three-channel test.
+  - **SSRF hardening on `/api/relay/verify`.** Apply the same
+    private-IP / blocked-port guard list that already protects
+    `/api/proxy`.
   - **Telegram channel scanning** with the same signal-extraction
     methodology used for X.
   - **Discord channel scanning** for projects that primarily live in

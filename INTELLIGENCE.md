@@ -17,14 +17,14 @@
   | --- | --- | --- | --- |
   | `/wallet` | POST | `{ address: string }` | Lightweight Solana wallet summary with AI-generated narrative |
   | `/wallet/onchain` | POST | `{ address: string }` | Deep on-chain scan: dev tokens, FIFO PnL, archetype |
-  | `/x-ca` | POST | `{ handle: string }` | Maps an X handle to its associated Solana CAs and handle history |
-  | `/smart-followers` | POST | `{ handle: string }` | Detects high-signal followers on an X account |
-  | `/github-scan` | POST | `{ owner, repo }` | AI repo review with structured trust score |
+  | `/x-ca` | POST | `{ username: string }` | Maps an X handle to its associated Solana CAs and handle history |
+  | `/smart-followers` | POST | `{ username: string }` | Heuristic preview of high-signal followers on an X account (full live scan Planned) |
+  | `/github-scan` | POST | `{ repo: "owner/name" \| URL }` | AI repo review with structured trust score |
 
-  The whole hub is rate-limited at 60 requests / minute / IP. The
+  The whole hub sits behind the global 60-rpm rate limiter. The
   GitHub scanner has its own dedicated 8-per-minute limiter on top
-  because every call hits a paid AI endpoint and a 60-second timeout
-  window.
+  because every call hits a paid AI endpoint, with a 60-second
+  per-request timeout window.
 
   ---
 
@@ -93,34 +93,37 @@
 
   ## X CA Checker — `/x-ca`
 
-  Pulls a profile via the official X API v2 (app-only Bearer), extracts
-  every Solana contract address (base58 32–44 chars, on-chain
-  verification step) from the bio plus a window of recent posts, and
-  adds **handle history via the Wayback Machine**: `firstSeen`,
-  `lastSeen`, and a list of `possiblePreviousNames` collected from
-  older snapshots of the same profile URL.
+  Pulls a profile via a Nitter mirror (server-side scrape with cheerio,
+  parallel with the Wayback fetch), extracts every Solana contract
+  address (base58 32–44 chars) from the bio plus a window of recent
+  posts, and adds **handle history via the Wayback Machine**:
+  `firstSeen`, `lastSeen`, and a list of `possiblePreviousNames`
+  collected from older snapshots of the same profile URL.
 
   The handle-history feature catches one of the most common scam
   patterns: a handle that was a different identity three months ago,
   posting a brand-new CA today.
 
-  Cached for 10 minutes per handle.
+  Upgrading the upstream from a Nitter mirror to the official X API v2
+  with an app-only Bearer is on the near-term hardening list; the
+  endpoint contract stays the same so callers won't have to change.
 
   ---
 
-  ## Smart followers — `/smart-followers`
+  ## Smart followers — `/smart-followers` (Planned, preview shipped)
 
-  Pulls the followers of an X handle via the X API v2 and returns the
-  high-signal subset, ranked by:
+  This endpoint currently returns a sample high-signal follower set
+  with an explicit `requiresApiKey: true` descriptor so the UI can show
+  the analysis surface immediately. Once the X API v2 Bearer is wired
+  it will scan the live follower graph and rank by:
 
   - Verification status.
   - Followers / following ratio.
   - Account age.
   - Intersecting follow-graph density.
 
-  Useful for sanity-checking a project's social-proof claims (a "1k
-  followers, all bots created last week" account looks very different
-  from a "1k followers, half are blue-chip founders" account).
+  The route shape (`{ username }` body) is locked so callers won't
+  need to change when the upgrade lands.
 
   ---
 
@@ -160,21 +163,28 @@
   hub's sharpest weapon against memecoin coordinator schemes that try
   to hide behind separate-looking on-chain, social, and code identities.
 
-  Every Intelligence call writes its observations into a memory-bounded
-  graph that links three node types:
+  The Intelligence routes write observations into a memory-bounded
+  graph that defines three node types:
 
   - **Wallets** → mints they touched (with side: buy / sell / mint).
+    *Live, written by `/wallet/onchain`.*
   - **GitHub repos** → mints they referenced in READMEs / source.
-  - **X accounts** → mints they posted (with optional Solscan / Birdeye
-    cross-reference).
+    *Live, written by `/github-scan`.*
+  - **X accounts** → mints they posted (with optional Solscan /
+    Birdeye cross-reference). *Edge type implemented in the graph
+    library; not yet wired from `/x-ca`. Planned.*
 
   When a caller asks for a verdict on a mint, the graph returns:
 
   | Verdict | Meaning |
   | --- | --- |
-  | `SAME_ENTITY_LIKELY` | All three channels (wallet activity, repo content, X posts) converge on the same mint within a tight time window, and the actors share at least one observable link |
-  | `CONVERGENT_INTEREST` | Two channels overlap (e.g. an X account posts a CA that a tracked wallet then buys) |
+  | `SAME_ENTITY_LIKELY` | All wired channels converge on the same mint within a tight time window and the actors share at least one observable link |
+  | `CONVERGENT_INTEREST` | Two channels overlap (e.g. a tracked wallet buys a CA that the GitHub scan associates with the same repo) |
   | `ISOLATED` | No multi-channel overlap; treat the signal at face value |
+
+  Today the verdict policy operates on the wallet ↔ repo channels.
+  Once the X-channel write is wired, the same policy automatically
+  upgrades to a three-channel convergence test.
 
   Wallet addresses returned in graph responses are masked
   (`first4…last4`) so prior-scan data is not leaked verbatim to
@@ -186,11 +196,13 @@
 
   ## Cache layer
 
-  `lib/cache.ts` is a small in-memory TTL cache used across every
-  intelligence endpoint. TTLs are explicit per call site (10 minutes for
-  X handle scans, longer for wallet deep-scans, configurable for AI
-  scans). The cache is process-local so a Railway redeploy is the only
-  event that flushes it.
+  `lib/cache.ts` is a small in-memory TTL cache used across the AI
+  and token-metadata layer of the Intelligence Hub. TTLs are explicit
+  per call site (configurable for AI scans, longer for wallet deep-
+  scans). The cache is process-local so a Railway redeploy is the
+  only event that flushes it. Per-endpoint result caching across all
+  five intel routes is rolling out incrementally; today not every
+  route is fronted by an explicit endpoint-level TTL.
 
   ---
 

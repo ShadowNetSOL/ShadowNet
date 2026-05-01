@@ -198,7 +198,7 @@
     Helius) → `solana-mainnet.publicnode.com` → `api.mainnet-beta.solana.com`.
   - **OpenAI / OpenRouter** via the standard `OPENAI_API_KEY` and optional
     `OPENAI_BASE_URL`. Default model is configurable via `AI_MODEL`.
-  - **X API v2** with an app-only Bearer token.
+  - **X profile data** today via a Nitter mirror (server-side scrape with cheerio); upgrade to the official X API v2 with an app-only Bearer is on the near-term hardening list.
   - **Wayback Machine** for X handle snapshot history.
   - **Dexscreener** for token pair enrichment.
   - **GitHub REST** for repo metadata.
@@ -226,9 +226,9 @@
   | Request timeout | 10 s app-wide, raised to 60 s for the GitHub scanner (AI calls take 20–30 s) |
   | Body size | 1 MB on JSON and urlencoded |
   | CORS | Open by default in this build (intended for dApp embedding); production deployments should narrow it at the edge proxy |
-  | SSRF | DNS-resolved RFC 1918 / loopback / link-local rejection on `/api/proxy` and `/api/relay/verify`, plus blocked-port list (22, 25, 3306, 6379), plus protocol allowlist (http / https only) |
+  | SSRF | DNS-resolved RFC 1918 / loopback / link-local rejection on `/api/proxy`, plus blocked-port list (22, 25, 3306, 6379), plus protocol allowlist (http / https only). The `/api/relay/verify` precheck currently validates protocol + URL shape only; porting the same DNS / port guard there is on the near-term hardening list. |
   | Logging | The proxy intentionally logs no request bodies, headers, or client IPs; only standard Express access logs reach Railway |
-  | Secrets | Loaded from environment variables only; `SOLANA_RPC_URL`, `OPENAI_API_KEY`, `TWITTER_API_BEARER` and friends never reach the browser bundle |
+  | Secrets | Loaded from environment variables only; `SOLANA_RPC_URL`, `OPENAI_API_KEY`, and any future bearer token never reach the browser bundle |
 
   ---
 

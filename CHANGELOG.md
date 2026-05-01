@@ -39,9 +39,12 @@
   - Browser-only Solana wallet generator with audited primitive
     libraries (`@scure/bip39`, `@noble/hashes`, `@noble/ed25519`),
     defense-in-depth runtime checks, and best-effort buffer wipe.
-  - Intelligence Hub: `/wallet`, `/wallet/onchain`, `/x-ca`,
-    `/smart-followers`, `/github-scan`.
-  - Cross-signal entity graph linking wallets, repos, and X accounts.
+  - Intelligence Hub: `/wallet`, `/wallet/onchain`, `/x-ca` (Nitter +
+    Wayback Machine), `/smart-followers` (preview pending X API
+    Bearer wiring), `/github-scan`.
+  - Cross-signal entity graph: wallet ↔ repo edges live; X-channel
+    edge type implemented in the graph library, wiring from `/x-ca`
+    pending.
   - 8-class wallet-archetype classifier with FIFO PnL.
   - GitHub trust scorer (scam-pattern, anti-gaming, structural risk).
   - Pump.fun token discovery feed via Dexscreener.
